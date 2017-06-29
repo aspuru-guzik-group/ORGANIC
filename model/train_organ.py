@@ -12,8 +12,6 @@ from gen_dataloader import Gen_Data_loader
 from dis_dataloader import Dis_dataloader
 from text_classifier import TextCNN
 from rollout import ROLLOUT
-from target_lstm import TARGET_LSTM
-# import io_utils
 import pandas as pd
 import importlib
 import sys
@@ -146,18 +144,6 @@ def generate_samples(sess, trainable_model, batch_size, generated_num, verbose=F
     return generated_samples
 
 
-def target_loss(sess, target_lstm, data_loader):
-    supervised_g_losses = []
-    data_loader.reset_pointer()
-
-    for it in range(data_loader.num_batch):
-        batch = data_loader.next_batch()
-        g_loss = sess.run(target_lstm.pretrain_loss, {target_lstm.x: batch})
-        supervised_g_losses.append(g_loss)
-
-    return np.mean(supervised_g_losses)
-
-
 def pre_train_epoch(sess, trainable_model, data_loader):
     supervised_g_losses = []
     data_loader.reset_pointer()
@@ -174,8 +160,8 @@ def pre_train_epoch(sess, trainable_model, data_loader):
 likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)
 
 
-def pretrain(sess, generator, target_lstm, train_discriminator):
-    # samples = generate_samples(sess, target_lstm, BATCH_SIZE, generated_num)
+def pretrain(sess, generator, train_discriminator):
+    # samples = generate_samples(sess, BATCH_SIZE, generated_num)
     gen_data_loader = Gen_Data_loader(BATCH_SIZE)
     gen_data_loader.create_batches(positive_samples)
     results = OrderedDict({'exp_name': PREFIX})
@@ -189,13 +175,11 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
         if epoch == 10 or epoch % 40 == 0:
             samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
             likelihood_data_loader.create_batches(samples)
-            test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-            print('\t test_loss {}, train_loss {}'.format(test_loss, loss))
+            print('\t train_loss {}'.format(loss))
             mm.compute_results(samples, train_samples, ord_dict, results)
 
     samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
     likelihood_data_loader.create_batches(samples)
-    test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
 
     samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
     likelihood_data_loader.create_batches(samples)
@@ -236,8 +220,6 @@ def main():
     best_score = 1000
     generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM,
                           HIDDEN_DIM, MAX_LENGTH, START_TOKEN)
-    target_lstm = TARGET_LSTM(vocab_size, BATCH_SIZE,
-                              EMB_DIM, HIDDEN_DIM, MAX_LENGTH, 0)
 
     with tf.variable_scope('discriminator'):
         cnn = TextCNN(
@@ -307,7 +289,7 @@ def main():
             print('\t* LOAD_PRETRAIN was set to false.')
 
         sess.run(tf.global_variables_initializer())
-        pretrain(sess, generator, target_lstm, train_discriminator)
+        pretrain(sess, generator, train_discriminator)
         path = saver.save(sess, ckpt_file)
         print('Pretrain finished and saved at {}'.format(path))
 
@@ -330,15 +312,8 @@ def main():
                 gen_samples = generate_samples(
                     sess, generator, BATCH_SIZE, SAMPLE_NUM)
             likelihood_data_loader.create_batches(gen_samples)
-            test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
             print('batch_num: {}'.format(nbatch))
-            print('test_loss: {}'.format(test_loss))
             results['Batch'] = nbatch
-            results['test_loss'] = test_loss
-
-            if test_loss < best_score:
-                best_score = test_loss
-                print('best score: %f' % test_loss)
 
             # results
             mm.compute_results(gen_samples, train_samples, ord_dict, results)
