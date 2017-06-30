@@ -251,20 +251,21 @@ def print_results(verified_samples, unverified_samples, results={}):
 #
 #   2.MOLECULAR METRICS
 #
-#       2.1. Diversity
-#       2.2. Variety
-#       2.3. Novelty, hardnovelty and softnovelty
-#       2.4. Creativity
-#       2.5. Symmetry
-#       2.6. Solubility
-#       2.7. Conciseness
-#       2.8. Synthetic accesibility
-#       2.9. Druglikeness
-#       2.10. Lipinski's rule of five
-#       2.11. NP-likeness
-#       2.12. PCE
-#       2.13. Bandgap
-#       2.14. Substructure match
+#       2.1. Validity
+#       2.2. Diversity
+#       2.3. Variety
+#       2.4. Novelty, hardnovelty and softnovelty
+#       2.5. Creativity
+#       2.6. Symmetry
+#       2.7. Solubility
+#       2.8. Conciseness
+#       2.9. Synthetic accesibility
+#       2.10. Druglikeness
+#       2.11. Lipinski's rule of five
+#       2.12. NP-likeness
+#       2.13. PCE
+#       2.14. Bandgap
+#       2.15. Substructure match
 #
 #############################################
 #
@@ -272,7 +273,20 @@ def print_results(verified_samples, unverified_samples, results={}):
 #
 
 #
-# 2.1. Diversity
+# 2.1. Validity
+#
+
+"""
+Simplest metric. Assigns 1.0 if the SMILES is correct, and 0.0
+if not.
+"""
+
+def batch_validity(smiles, train_smiles):
+    vals = [1.0 if verify_sequence(s) else 0.0 for s in smiles]
+    return vals
+
+#
+# 2.2. Diversity
 #
 
 """
@@ -302,7 +316,7 @@ def diversity(smile, fps):
     return val
 
 #
-# 2.2. Variety
+# 2.3. Variety
 #
 
 """
@@ -328,7 +342,7 @@ def variety(smile, setfps):
     return val
 
 #
-# 2.3. Novelty
+# 2.4. Novelty
 #
 
 """
@@ -364,7 +378,7 @@ def batch_softnovelty(smiles, train_smiles):
     return vals
 
 #
-# 2.4. Creativity
+# 2.5. Creativity
 #
 
 """
@@ -383,7 +397,7 @@ def creativity(smile, setfps):
     return np.mean(DataStructs.BulkTanimotoSimilarity(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048), setfps))
 
 #
-# 2.5. Symmetry
+# 2.6. Symmetry
 #
 
 """
@@ -418,7 +432,7 @@ def getSymmetry(ids, xyz):
     return mol.sch_symbol
 
 #
-# 2.6. Solubility
+# 2.7. Solubility
 #
 
 """
@@ -444,7 +458,7 @@ def logP(smile, train_smiles=None):
     return val
 
 #
-# 2.7. Conciseness
+# 2.8. Conciseness
 #
 
 """
@@ -465,7 +479,7 @@ def conciseness(smile, train_smiles=None):
     return val
 
 #
-# 2.8. Synthetic accesibility
+# 2.9. Synthetic accesibility
 #
 
 """
@@ -565,7 +579,7 @@ def SA_score(smile):
     return val
 
 #
-# 2.9. Drug-likeness
+# 2.10. Drug-likeness
 #
 
 """
@@ -592,7 +606,7 @@ def drug_candidate(smile, train_smiles):
     return val
 
 #
-# 2.10. Lipinski's rule of five
+# 2.11. Lipinski's rule of five
 #
 
 """
@@ -626,7 +640,7 @@ def Lipinski(smile):
     return druglikeness
 
 #
-# 2.11. NP-likeness
+# 2.12. NP-likeness
 #
 
 """
@@ -671,7 +685,7 @@ def NP_score(smile):
     return val
 
 #
-# 2.12. PCE
+# 2.13. PCE
 #
 
 """
@@ -686,7 +700,7 @@ def batch_PCE(smiles, train_smiles=None):
     return vals
 
 #
-# 2.13. Bandgap
+# 2.14. Bandgap
 #
 
 """
@@ -700,7 +714,7 @@ def batch_bandgap(smiles, train_smiles=None):
     return vals
 
 #
-# 2.14. Substructure match
+# 2.15. Substructure match
 #
 
 """
@@ -731,6 +745,7 @@ def substructure_match(smile, train_smiles=None, sub_mol=None):
 def load_reward(objective):
 
     metrics = {}
+    metrics['validity'] = batch_validity
     metrics['novelty'] = batch_novelty
     metrics['creativity'] = batch_creativity
     metrics['hard_novelty'] = batch_hardnovelty
