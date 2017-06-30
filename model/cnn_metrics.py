@@ -121,7 +121,7 @@ def model_cnn32(features, targets, mode):
     output = tf.layers.dense(
         inputs=dense,
         units=1,
-        activation=tf.nn.relu)
+                activation=tf.nn.relu)
 
     loss = None
     train_op = None
@@ -181,7 +181,7 @@ class cnn_pce(object):
     def itToList(self, predictions):
         return sum([p['output'] for p in predictions])
 
-class cnn_homolumo(object, lbit=64):
+class cnn_homolumo(object):
 
     def __init__(self, lbit=64):
         if lbit == 64:

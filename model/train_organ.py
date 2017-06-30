@@ -17,35 +17,56 @@ import importlib
 import sys
 from tqdm import tqdm
 
-
 if len(sys.argv) == 2:
     PARAM_FILE = sys.argv[1]
 else:
     PARAM_FILE = 'exp.json'
 params = json.loads(open(PARAM_FILE).read(), object_pairs_hook=OrderedDict)
+
 ##########################################################################
 #  Training  Hyper-parameters
 ##########################################################################
-# load metrics file
 mm = importlib.import_module(params['METRICS_FILE'])
-
-## Load metrics file
-#if params['METRICS_FILE'] == 'mol_metrics':
-#    mm = mol_metrics
-#elif params['METRICS_FILE'] == 'music_metrics':
-#    mm = music_metrics
-#else:
-#    raise ValueError('Metrics file unknown!')
 
 PREFIX = params['EXP_NAME']
 PRE_EPOCH_NUM = params['G_PRETRAIN_STEPS']
 TRAIN_ITER = params['G_STEPS']  # generator
-SEED = params['SEED']
 BATCH_SIZE = params["BATCH_SIZE"]
-TOTAL_BATCH = params['TOTAL_BATCH']
+SEED = params['SEED']
 dis_batch_size = 64
 dis_num_epochs = 3
 dis_alter_epoch = params['D_PRETRAIN_STEPS']
+global TRAINING_PROGRAM
+
+
+
+BATCHES = params['TOTAL_BATCH']
+OBJECTIVE = params['OBJECTIVE']
+if (type(BATCHES) is list) or (type(OBJECTIVE) is list):
+
+    TRAINING_PROGRAM = True
+    if type(OBJECTIVE) is not list or type(BATCHES) is not list:
+        print("Unmatching training program parameters")
+        raise
+    if len(OBJECTIVE) != len(BATCHES):
+        print("Unmatching training program parameters")
+        raise
+    TOTAL_BATCH = np.sum(np.asarray(BATCHES))
+
+    i = 0
+    education = {}
+    for j,stage in enumerate(BATCHES):
+        for _ in range(stage):
+            education[i] = OBJECTIVE[j]
+            i += 1
+
+else:
+
+    TRAINING_PROGRAM = False
+    TOTAL_BATCH = BATCHES
+
+
+##########################################################################
 
 ##########################################################################
 #  Generator  Hyper-parameters
@@ -60,7 +81,6 @@ D_WEIGHT = params['LAMBDA']
 D = max(int(5 * D_WEIGHT), 1)
 ##########################################################################
 
-
 ##########################################################################
 #  Discriminator  Hyper-parameters
 ##########################################################################
@@ -69,24 +89,42 @@ dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
 dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
 dis_dropout_keep_prob = 0.75
 dis_l2_reg_lambda = 0.2
+##########################################################################
+
 
 #============= Objective ==============
 
-reward_func = mm.load_reward(params['OBJECTIVE'])
+def make_reward(train_samples, nbatch):
 
+    if TRAINING_PROGRAM == False:
 
-def make_reward(train_samples):
+        reward_func = mm.load_reward(OBJECTIVE)
 
-    def batch_reward(samples):
-        decoded = [mm.decode(sample, ord_dict) for sample in samples]
-        pct_unique = len(list(set(decoded))) / float(len(decoded))
-        rewards = reward_func(decoded, train_samples)
-        weights = np.array([pct_unique / float(decoded.count(sample))
-                            for sample in decoded])
+        def batch_reward(samples):
+            decoded = [mm.decode(sample, ord_dict) for sample in samples]
+            pct_unique = len(list(set(decoded))) / float(len(decoded))
+            rewards = reward_func(decoded, train_samples)
+            weights = np.array([pct_unique / float(decoded.count(sample))
+                                for sample in decoded])
 
-        return rewards * weights
+            return rewards * weights
 
-    return batch_reward
+        return batch_reward
+
+    else:
+
+        reward_func = mm.load_reward(education[nbatch])
+
+        def batch_reward(samples):
+            decoded = [mm.decode(sample, ord_dict) for sample in samples]
+            pct_unique = len(list(set(decoded))) / float(len(decoded))
+            rewards = reward_func(decoded, train_samples)
+            weights = np.array([pct_unique / float(decoded.count(sample))
+                                for sample in decoded])
+
+            return rewards * weights
+
+        return batch_reward
 
 
 def print_rewards(rewards):
@@ -293,9 +331,6 @@ def main():
         path = saver.save(sess, ckpt_file)
         print('Pretrain finished and saved at {}'.format(path))
 
-    # create reward function
-    batch_reward = make_reward(train_samples)
-
     rollout = ROLLOUT(generator, 0.8)
 
     print('#########################################################################')
@@ -303,6 +338,7 @@ def main():
     results_rows = []
     for nbatch in tqdm(range(TOTAL_BATCH)):
         results = OrderedDict({'exp_name': PREFIX})
+        batch_reward = make_reward(train_samples, nbatch)
         if nbatch % 1 == 0 or nbatch == TOTAL_BATCH - 1:
             print('* Making samples')
             if nbatch % 10 == 0:

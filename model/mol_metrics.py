@@ -167,8 +167,17 @@ def decode(ords, ord_dict): return unpad(
 
 def print_params(p):
     print('Using parameters:')
-    for key, value in p.items():
-        print('{:20s} - {:12}'.format(key, value))
+    if (type(p['TOTAL_BATCH']) is list) or (type(p['OBJECTIVE']) is list):
+        for key, value in p.items():
+            if key == 'OBJECTIVE' or key == 'TOTAL_BATCH':
+                print('{:20s}'.format(key))
+                for each in value:
+                    print('     {}'.format(each))
+            else:
+                print('{:20s} - {:12}'.format(key, value))
+    else:
+        for key, value in p.items():
+            print('{:20s} - {:12}'.format(key, value))
     print('rest of parameters are set as default\n')
     return
 
