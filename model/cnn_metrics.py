@@ -63,7 +63,7 @@ def model_cnn64(features, targets, mode):
     loss = None
     train_op = None
     prediction_values = tf.reshape(output, [-1])
-    predictions = {"pce": prediction_values}
+    predictions = {"output": prediction_values}
 
     if mode != learn.ModeKeys.INFER:
         loss = tf.losses.mean_squared_error(
@@ -179,7 +179,7 @@ class cnn_pce(object):
         return data_y
 
     def itToList(self, predictions):
-        return sum([p['pce'] for p in predictions])
+        return sum([p['output'] for p in predictions])
 
 class cnn_homolumo(object, lbit=64):
 
@@ -191,29 +191,6 @@ class cnn_homolumo(object, lbit=64):
         else:
             print("Unexpected number of bits")
             raise
-
-    def train(self):
-
-        data = pd.read_csv('../data/opv.csv')
-        smiles_text = data['smiles'][:10000]
-        homo = data['homo_calib'][:10000]
-        lumo = data['lumo_calib'][:10000]
-        hl = lumo - homo 
-
-        smiles = [Chem.MolFromSmiles(smile) for smile in tqdm(smiles_text)]
-        fps = np.asarray([Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=4096) for mol in tqdm(smiles)])
-        train_x = np.asarray(fps)
-        train_y = np.asarray(hl)
-
-        def batched_input_fn(features, labels, batch_size):
-            def _input_fn():
-                all_x = tf.constant(features, shape=features.shape, dtype=tf.float32)
-                all_y = tf.constant(labels, shape=labels.shape, dtype=tf.float32)
-                sliced_input = tf.train.slice_input_producer([all_x, all_y])
-                return tf.train.batch(sliced_input, batch_size=batch_size)
-            return _input_fn
-
-        self.cnn.fit(input_fn = batched_input_fn(train_x, train_y, 1000), steps=5000)
 
     def predict(self, smile):
 
@@ -234,7 +211,7 @@ class cnn_homolumo(object, lbit=64):
         return data_y
 
     def itToList(self, predictions):
-        return sum([p['pce'] for p in predictions])
+        return sum([p['output'] for p in predictions])
 
 
 #cnn = cnn_homolumo()
