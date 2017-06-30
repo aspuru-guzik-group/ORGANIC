@@ -177,20 +177,23 @@ def compute_results(model_samples, train_data, ord_dict, results={}, verbose=Tru
     results['mean_length'] = np.mean([len(sample) for sample in samples])
     results['n_samples'] = len(samples)
     results['uniq_samples'] = len(set(samples))
-    verified_samples = [
-        sample for sample in samples if verify_sequence(sample)]
-    unverified_samples = [
-        sample for sample in samples if not verify_sequence(sample)]
+    verified_samples = []
+    unverified_samples = []
+    for sample in samples:
+        if verify_sequence(sample):
+            verified_samples.append(sample)
+        else:
+            unverified_samples.append(sample)
     results['good_samples'] = len(verified_samples)
     results['bad_samples'] = len(unverified_samples)
-    # collect metrics
-    metrics = ['novelty', 'hard_novelty', 'soft_novelty',
-               'diversity', 'conciseness', 'solubility',
-               'naturalness', 'synthesizability']
+    # # collect metrics
+    # metrics = ['novelty', 'hard_novelty', 'soft_novelty',
+    #            'diversity', 'conciseness', 'solubility',
+    #            'naturalness', 'synthesizability']
 
-    for objective in metrics:
-        func = load_reward(objective)
-        results[objective] = np.mean(func(verified_samples, train_data))
+    # for objective in metrics:
+    #     func = load_reward(objective)
+    #     results[objective] = np.mean(func(verified_samples, train_data))
 
     # save smiles
     if 'Batch' in results.keys():
@@ -199,11 +202,12 @@ def compute_results(model_samples, train_data, ord_dict, results={}, verbose=Tru
         results['model_samples'] = smi_name
     # print results
     if verbose:
-        print_results(verified_samples, unverified_samples,
-                      metrics, results)
+        # print_results(verified_samples, unverified_samples, metrics, results)
+        print_results(verified_samples, unverified_samples, results)
     return
 
-def print_results(verified_samples, unverified_samples, metrics, results={}):
+# def print_results(verified_samples, unverified_samples, metrics, results={}):
+def print_results(verified_samples, unverified_samples, results={}):
     print('~~~ Summary Results ~~~')
     print('{:15s} : {:6d}'.format("Total samples", results['n_samples']))
     percent = results['uniq_samples'] / float(results['n_samples']) * 100
@@ -215,9 +219,9 @@ def print_results(verified_samples, unverified_samples, metrics, results={}):
     percent = results['good_samples'] / float(results['n_samples']) * 100
     print('{:15s} : {:6d} ({:2.2f}%)'.format(
         'Verified', results['good_samples'], percent))
-    print('\tmetrics...')
-    for i in metrics:
-        print('{:20s} : {:1.4f}'.format(i, results[i]))
+    # print('\tmetrics...')
+    # for i in metrics:
+    #     print('{:20s} : {:1.4f}'.format(i, results[i]))
 
     if len(verified_samples) > 10:
         print('\nExample of good samples:')
@@ -371,7 +375,7 @@ def batch_creativity(smiles, train_smiles):
 
 def creativity(smile, setfps):
     mol = Chem.MolFromSmiles(smile)
-    return np.mean(DataStructs.BulkTanimotoSimilarity(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048), fps))
+    return np.mean(DataStructs.BulkTanimotoSimilarity(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048), setfps))
 
 #
 # 2.5. Symmetry
@@ -598,21 +602,21 @@ def batch_lipinski(smile, train_smiles):
 def Lipinski(smile):
     mol = Chem.MolFromSmiles(smile)
     druglikeness = 0.0
-    druglikeness += 0.25 if logP(mol)=0 else 0.0
+    druglikeness += 0.25 if logP(mol) == 0 else 0.0
     druglikeness += 0.25 if Chem.Descriptors.MolWt(mol) <= 500 else 0.0
     # Look for hydrogen bond aceptors
     acceptors = 0
     for atom in mol.GetAtoms():
-        acceptors += 1 if atom.GetAtomicNum() = 8
-        acceptors += 1 if atom.GetAtomicNum() = 7
+        acceptors += 1 if atom.GetAtomicNum() == 8 else 0.0
+        acceptors += 1 if atom.GetAtomicNum() == 7 else 0.0
     druglikeness += 0.25 if acceptors <= 10 else 0.0
     # Look for hydrogen bond donors
     donors = 0
     for bond in mol.GetBonds():
         a1 = mol.GetAtomWithIdx(bond.GetBeginAtomIdx()).GetAtomicNum()
         a2 = mol.GetAtomWithIdx(bond.GetEndAtomIdx()).GetAtomicNum()
-        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8,1)) 
-        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7,1)) 
+        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8,1)) else 0.0
+        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7,1)) else 0.0
     druglikeness += 0.25 if donors <= 5 else 0.0
     return druglikeness
 
