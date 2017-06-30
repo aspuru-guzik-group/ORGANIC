@@ -49,6 +49,9 @@ global NP_LOADED, SA_LOADED
 NP_LOADED = False
 SA_LOADED = False
 
+global BITSIDE
+BITSIDE = 64
+
 #
 # 1.2. Loading utilities
 #
@@ -237,7 +240,7 @@ def print_results(verified_samples, unverified_samples, metrics, results={}):
 
 ############################################
 #
-#   2.DIVERSITY METRICS
+#   2.MOLECULAR METRICS
 #
 #       2.1. Diversity
 #       2.2. Variety
@@ -248,10 +251,11 @@ def print_results(verified_samples, unverified_samples, metrics, results={}):
 #       2.7. Conciseness
 #       2.8. Synthetic accesibility
 #       2.9. Druglikeness
-#       2.10. NP-likeness
-#       2.11. PCE
-#       2.12. Bandgap
-#       2.13. Substructure match
+#       2.10. Lipinski's rule of five
+#       2.11. NP-likeness
+#       2.12. PCE
+#       2.13. Bandgap
+#       2.14. Substructure match
 #
 #############################################
 #
@@ -565,7 +569,7 @@ an equally ponderated mean of the following factors:
     - Soft novelty
 """
 
-def batch_drugcandidate(smiles, train_smiles):
+def batch_drugcandidate(smiles, train_smiles=None):
     vals = [drug_candidate(s, train_smiles)
             if verify_sequence(s) else 0 for s in smiles]
     return vals
@@ -579,8 +583,43 @@ def drug_candidate(smile, train_smiles):
     return val
 
 #
-# 2.10. NP-likeness
+# 2.10. Lipinski's rule of five
 #
+
+"""
+This metric assigns 1.0 if the molecule follows Lipinski's rule of
+five and 0.0 if not.
+"""
+
+def batch_lipinski(smile, train_smiles):
+    vals = [Lipinski(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    return vals
+
+def Lipinski(smile):
+    mol = Chem.MolFromSmiles(smile)
+    druglikeness = 0.0
+    druglikeness += 0.25 if logP(mol)=0 else 0.0
+    druglikeness += 0.25 if Chem.Descriptors.MolWt(mol) <= 500 else 0.0
+    # Look for hydrogen bond aceptors
+    acceptors = 0
+    for atom in mol.GetAtoms():
+        acceptors += 1 if atom.GetAtomicNum() = 8
+        acceptors += 1 if atom.GetAtomicNum() = 7
+    druglikeness += 0.25 if acceptors <= 10 else 0.0
+    # Look for hydrogen bond donors
+    donors = 0
+    for bond in mol.GetBonds():
+        a1 = mol.GetAtomWithIdx(bond.GetBeginAtomIdx()).GetAtomicNum()
+        a2 = mol.GetAtomWithIdx(bond.GetEndAtomIdx()).GetAtomicNum()
+        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8,1)) 
+        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7,1)) 
+    druglikeness += 0.25 if donors <= 5 else 0.0
+    return druglikeness
+
+#
+# 2.11. NP-likeness
+#
+
 """
 This metric computes the likelihood that a given molecule is
 a natural product.
@@ -623,7 +662,7 @@ def NP_score(smile):
     return val
 
 #
-# 2.11. PCE
+# 2.12. PCE
 #
 
 """
@@ -633,12 +672,12 @@ bit array containing Morgan fingerprints.
 """
 
 def batch_PCE(smiles, train_smiles=None):
-    cnn = cnn_pce()
+    cnn = cnn_pce(lbit=BITSIDE)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return vals
 
 #
-# 2.12. Bandgap
+# 2.13. Bandgap
 #
 
 """
@@ -647,12 +686,12 @@ molecule,using a CNN on a 64x64 bit array containing Morgan fingerprints.
 """
 
 def batch_bandgap(smiles, train_smiles=None):
-    cnn = cnn_homolumo()
+    cnn = cnn_homolumo(lbit=BITSIDE)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return vals
 
 #
-# 2.13. Substructure match
+# 2.14. Substructure match
 #
 
 """
@@ -694,6 +733,7 @@ def load_reward(objective):
     metrics['solubility'] = batch_solubility
     metrics['naturalness'] = batch_NPLikeliness
     metrics['synthesizability'] = batch_SA
+    metrics['lipinski'] = batch_lipinski
     metrics['drug_candidate'] = batch_drugcandidate
     metrics['pce'] = batch_PCE
     metrics['bandgap'] = batch_bandgap
