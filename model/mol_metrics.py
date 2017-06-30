@@ -23,46 +23,74 @@ from chemspipy import ChemSpider
 from chembl_webresource_client import *
 from cnn_metrics import cnn_pce, cnn_homolumo
 
-# Parallelization
-from multiprocessing import Pool
-pool = Pool(os.cpu_count())
-
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
-#====== load data
 
+############################################
+#
+#   1. GLOBAL FUNCTIONS AND UTILITIES
+#
+#       1.1. Loading models
+#       1.2. Loading utilities
+#       1.3. Math utilities
+#       1.4. Encoding/decoding utilities
+#       1.5. Results utilities
+#
+#############################################
+#
+#
+#
 
-def readNPModel(filename='../data/NP_score.pkl.gz'):
-    print("mol_metrics: reading NP model ...")
-    start = time.time()
-    NP_model = pickle.load(gzip.open(filename))
-    end = time.time()
-    print("loaded in {}".format(end - start))
-    return NP_model
+#
+# 1.1. Loading models
+#
 
-NP_model = readNPModel()
+global NP_LOADED, SA_LOADED
+NP_LOADED = False
+SA_LOADED = False
 
+#
+# 1.2. Loading utilities
+#
 
-def readSAModel(filename='../data/SA_score.pkl.gz'):
-    print("mol_metrics: reading SA model ...")
-    start = time.time()
-    model_data = pickle.load(gzip.open(filename))
-    outDict = {}
-    for i in model_data:
-        for j in range(1, len(i)):
-            outDict[i[j]] = float(i[0])
-    SA_model = outDict
-    end = time.time()
-    print("loaded in {}".format(end - start))
-    return SA_model
+def load_train_data(filename):
+    ext = filename.split(".")[-1]
+    if ext == 'csv':
+        return read_smiles_csv(filename)
+    if ext == 'smi':
+        return read_smi(filename)
+    else:
+        raise ValueError('data is not smi or csv!')
+    return
 
-SA_model = readSAModel()
-#====== math utility
+def read_smiles_csv(filename):
+    # Assumes smiles is in column 0
+    with open(filename) as file:
+        reader = csv.reader(file)
+        smiles_idx = next(reader).index("smiles")
+        data = [row[smiles_idx] for row in reader]
+    return data
 
+def save_smi(name, smiles):
+    if not os.path.exists('epoch_data'):
+        os.makedirs('epoch_data')
+    smi_file = os.path.join('epoch_data', "{}.smi".format(name))
+    with open(smi_file, 'w') as afile:
+        afile.write('\n'.join(smiles))
+    return
+
+def read_smi(filename):
+    with open(filename) as file:
+        smiles = file.readlines()
+    smiles = [i.strip() for i in smiles]
+    return smiles
+
+#
+# 1.3. Math utilities
+#
 
 def remap(x, x_min, x_max):
     return (x - x_min) / (x_max - x_min)
-
 
 def constant_bump(x, x_low, x_high, decay=0.025):
     if x <= x_low:
@@ -73,22 +101,20 @@ def constant_bump(x, x_low, x_high, decay=0.025):
         return 1
     return
 
-
 def pct(a, b):
     if len(b) == 0:
         return 0
     return float(len(a)) / len(b)
 
-#====== encoding/decoding utility
-
+#
+# 1.4. Encoding/decoding utilities
+#
 
 def canon_smile(smile):
     return MolToSmiles(MolFromSmiles(smile))
 
-
 def verified_and_below(smile, max_len):
     return len(smile) < max_len and verify_sequence(smile)
-
 
 def verify_sequence(smile):
     mol = Chem.MolFromSmiles(smile)
@@ -99,6 +125,13 @@ def restrict_to_valid(smile):
     if (smile != '' and mol is not None and mol.GetNumAtoms() > 1):
         return smile
     return None
+
+def filter_smiles(smiles):
+    mols = []
+    for smile in smiles:
+        if verify_sequence(smile) == True:
+            mols.append(smile)
+    return mols
 
 def build_vocab(smiles, pad_char='_', start_char='^'):
     i = 1
@@ -112,77 +145,29 @@ def build_vocab(smiles, pad_char='_', start_char='^'):
     char_dict[pad_char], ord_dict[i] = i, pad_char
     return char_dict, ord_dict
 
-
 def pad(smile, n, pad_char='_'):
     if n < len(smile):
         return smile
     return smile + pad_char * (n - len(smile))
 
-
 def unpad(smile, pad_char='_'): return smile.rstrip(pad_char)
-
 
 def encode(smile, max_len, char_dict): return [
     char_dict[c] for c in pad(smile, max_len)]
 
-
 def decode(ords, ord_dict): return unpad(
     ''.join([ord_dict[o] for o in ords]))
 
+#
+# 1.5. Results utilities
+#
 
-def load_train_data(filename):
-    ext = filename.split(".")[-1]
-    if ext == 'csv':
-        return read_smiles_csv(filename)
-    if ext == 'smi':
-        return read_smi(filename)
-    else:
-        raise ValueError('data is not smi or csv!')
-    return
-
-
-def read_smiles_csv(filename):
-    # Assumes smiles is in column 0
-    with open(filename) as file:
-        reader = csv.reader(file)
-        smiles_idx = next(reader).index("smiles")
-        data = [row[smiles_idx] for row in reader]
-    return data
-
-
-def save_smi(name, smiles):
-    if not os.path.exists('epoch_data'):
-        os.makedirs('epoch_data')
-    smi_file = os.path.join('epoch_data', "{}.smi".format(name))
-    with open(smi_file, 'w') as afile:
-        afile.write('\n'.join(smiles))
-    return
-
-
-def read_smi(filename):
-    with open(filename) as file:
-        smiles = file.readlines()
-    smiles = [i.strip() for i in smiles]
-    return smiles
-
-def input_predict(features):
-
-    def _input_fn():
-        all_x = tf.constant(features, shape=features.shape, dtype=tf.float32)
-        print(all_x)
-        print(all_x.shape)
-        return all_x
-
-    return _input_fn
-
-#====== results utility
 def print_params(p):
     print('Using parameters:')
     for key, value in p.items():
         print('{:20s} - {:12}'.format(key, value))
     print('rest of parameters are set as default\n')
     return
-
 
 def compute_results(model_samples, train_data, ord_dict, results={}, verbose=True):
     samples = [decode(s, ord_dict) for s in model_samples]
@@ -214,7 +199,6 @@ def compute_results(model_samples, train_data, ord_dict, results={}, verbose=Tru
         print_results(verified_samples, unverified_samples,
                       metrics, results)
     return
-
 
 def print_results(verified_samples, unverified_samples, metrics, results={}):
     print('~~~ Summary Results ~~~')
@@ -250,8 +234,38 @@ def print_results(verified_samples, unverified_samples, metrics, results={}):
     print('~~~~~~~~~~~~~~~~~~~~~~~')
     return
 
-#====== diversity metric
 
+############################################
+#
+#   2.DIVERSITY METRICS
+#
+#       2.1. Diversity
+#       2.2. Variety
+#       2.3. Novelty, hardnovelty and softnovelty
+#       2.4. Creativity
+#       2.5. Symmetry
+#       2.6. Solubility
+#       2.7. Conciseness
+#       2.8. Synthetic accesibility
+#       2.9. Druglikeness
+#       2.10. NP-likeness
+#       2.11. PCE
+#       2.12. Bandgap
+#       2.13. Substructure match
+#
+#############################################
+#
+#
+#
+
+#
+# 2.1. Diversity
+#
+
+"""
+This metric compares the Tanimoto distance of a given molecule
+with a random sample of the training smiles.
+"""
 
 def batch_diversity(smiles, train_smiles):
     rand_smiles = random.sample(train_smiles, 100)
@@ -262,9 +276,7 @@ def batch_diversity(smiles, train_smiles):
             else 0.0 for s in smiles]
     return vals
 
-
 def diversity(smile, fps):
-    val = 0.0
     low_rand_dst = 0.9
     mean_div_dst = 0.945
     ref_mol = Chem.MolFromSmiles(smile)
@@ -276,65 +288,95 @@ def diversity(smile, fps):
     val = np.clip(val, 0.0, 1.0)
     return val
 
+#
+# 2.2. Variety
+#
 
-#==============
+"""
+This metric compares the Tanimoto distance of a given molecule
+with a random sample of the other generated smiles.
+"""
 
-def batch_variety(smiles, train_smiles = None):
-    vals = np.zeros(len(smiles))
-    fps = [Chem.GetMorganFingerprint(Chem.MolFromSmiles(smile), 4) if verify_sequence(smile) else None for smile in smiles]
-    setfps = np.random.choice(fps, int(len(smiles/10)))
-    for i in range(len(smiles)):
-        vals[i] = variety(fps[i], setfps) if verify_sequence(smiles[i]) else 0.0
+def batch_variety(smiles, train_smiles=None):
+    mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(filter_smiles(smiles), len(smiles)/10)]
+    setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
+    vals = [variety(smile, setfps) if verify_sequence(smile) else 0.0 for smile in smiles]
     return vals
 
-def variety(fps, setfps):
-    dist = 0
-    for fp in setfps:
-        dist += DataStructs.TanimotoSimilarity(fps, fp)
-    return dist
+def variety(smile, setfps):
+    low_rand_dst = 0.9
+    mean_div_dst = 0.945
+    mol = Chem.MolFromSmiles(smile)
+    fp = Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048)
+    dist = DataStructs.BulkTanimotoSimilarity(fp, setfps, returnDistance=True)
+    mean_dist = np.mean(np.array(dist))
+    val = remap(mean_dist, low_rand_dst, mean_div_dst)
+    val = np.clip(val, 0.0, 1.0)
+    return val
 
-#==============
+#
+# 2.3. Novelty
+#
 
+"""
+These metrics check whether a given smile is in the provided
+training set or not.
+"""
 
 def batch_novelty(smiles, train_smiles):
     vals = [novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
     return vals
 
+def novelty(smile, train_smiles):
+    newness = 1.0 if smile not in train_smiles else 0.0
+    return newness
 
 def batch_hardnovelty(smiles, train_smiles):
     vals = [hard_novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
     return vals
 
+def hard_novelty(smile, train_smiles):
+    newness = 1.0 if canon_smile(smile) not in train_smiles else 0.0
+    return newness
+
+def soft_novelty(smile, train_smiles):
+    newness = 1.0 if smile not in train_smiles else 0.3
+    return newness
 
 def batch_softnovelty(smiles, train_smiles):
     vals = [soft_novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
-
     return vals
 
+#
+# 2.4. Creativity
+#
 
-def novelty(smile, train_smiles):
-    newness = 1.0 if smile not in train_smiles else 0.0
-    return newness
-
-
-#==============
+"""
+This metric computes the Tanimoto distance of a smile to the training set,
+as a measure of how different these molecules are from the provided ones.
+"""
 
 def batch_creativity(smiles, train_smiles):
-    fps = [Chem.GetMorganFingerprint(Chem.MolFromSmiles(smile), 4) if verify_sequence(smile) else None for smile in train_smiles]
-    vals =  [creativity(Chem.MolFromSmiles(smile), fps) if verify_sequence(smile) else 0 for smile in smiles]
+    mols = [Chem.MolFromSmiles(smile) for smile in filter_smiles(train_smiles)]
+    setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
+    vals = [creativity(smile, setfps) if verify_sequence(smile) else 0.0 for smile in smiles]
     return vals
 
-def creativity(mol, fps):
-    creativity = 0
-    for fp in fps:
-        if fp != None:
-            creativity += DataStructs.TanimotoSimilarity(Chem.GetMorganFingerprint(mol, 4), fp)
-    return creativity/len(fps)
+def creativity(smile, setfps):
+    mol = Chem.MolFromSmiles(smile)
+    return np.mean(DataStructs.BulkTanimotoSimilarity(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048), fps))
 
-#==============
+#
+# 2.5. Symmetry
+#
+
+"""
+This metric yields 1.0 if the generated molecule has any element of symmetry, and 0.0
+if the point group is C1.
+"""
 
 def batch_symmetry(smiles, train_smiles=None):
     vals = [symmetry(smile) if verify_sequence(smile) else 0 for smile in smiles]
@@ -345,12 +387,7 @@ def symmetry(smile):
     sch_symbol = getSymmetry(ids, xyz)
     return 1.0 if sch_symbol != 'C1' else 0.0
 
-def getSymmetry(ids, xyz):
-    mol = PointGroupAnalyzer(mg.Molecule(ids, xyz))
-    return mol.sch_symbol
-
 def get3DCoords(smile):
-
     molec = Chem.MolFromSmiles(smile)
     mwh = Chem.AddHs(molec)
     Chem.EmbedMolecule(mwh)
@@ -362,22 +399,23 @@ def get3DCoords(smile):
         ids.append(mwh.GetAtomWithIdx(i).GetSymbol())
         xyz.append([pos.x, pos.y, pos.z])
     return ids, xyz
-    
-#==============
-# assumes you already filtered verified molecules
 
+def getSymmetry(ids, xyz):
+    mol = PointGroupAnalyzer(mg.Molecule(ids, xyz))
+    return mol.sch_symbol
 
-def soft_novelty(smile, train_smiles):
-    newness = 1.0 if smile not in train_smiles else 0.3
-    return newness
+#
+# 2.6. Solubility
+#
 
+"""
+This metric computes the logarithm of the water-octanol partition
+coefficient, using RDkit's implementation of Wildman-Crippen method, 
+and then remaps it to the 0.0-1.0 range.
 
-def hard_novelty(smile, train_smiles):
-    newness = 1.0 if canon_smile(smile) not in train_smiles else 0.0
-    return newness
-
-
-#======= solubility
+Wildman, S. A., & Crippen, G. M. (1999). Prediction of physicochemical parameters by atomic contributions. 
+Journal of chemical information and computer sciences, 39(5), 868-873.
+"""
 
 def batch_solubility(smiles, train_smiles=None):
     vals = [logP(s, train_smiles) if verify_sequence(s) else 0 for s in smiles]
@@ -392,25 +430,14 @@ def logP(smile, train_smiles=None):
     val = np.clip(val, 0.0, 1.0)
     return val
 
-#====== DrugCandidate
+#
+# 2.7. Conciseness
+#
 
-
-def drug_candidate(smile, train_smiles):
-    good_logp = constant_bump(logP(smile), 0.210, 0.945)
-    sa = SA_score(smile)
-    novel = soft_novelty(smile, train_smiles)
-    compact = conciseness(smile)
-    val = (compact + good_logp + sa + novel) / 4.0
-    return val
-
-
-def batch_drugcandidate(smiles, train_smiles):
-    vals = [drug_candidate(s, train_smiles)
-            if verify_sequence(s) else 0 for s in smiles]
-    return vals
-
-#====== Conciseness
-
+"""
+This metric penalizes smiles strings that are too long, assuming that the
+canonic smile is the shortest representation.
+"""
 
 def batch_conciseness(smiles, train_smiles=None):
     vals = [conciseness(s) if verify_sequence(s) else 0 for s in smiles]
@@ -424,51 +451,49 @@ def conciseness(smile, train_smiles=None):
     val = 1 - 1.0 / 20.0 * val
     return val
 
-#====== Contains substructure
+#
+# 2.8. Synthetic accesibility
+#
 
+"""
+This metric checks whether a given molecule is easy to synthesize or not.
+It is based on (although not completely equivalent to) the work of Ertl
+and Schuffenhauer.
 
-def substructure_match(smile, train_smiles=None, sub_mol=None):
-    mol = Chem.MolFromSmiles(smile)
-    val = mol.HasSubstructMatch(sub_mol)
-    return int(val)
+Ertl, P., & Schuffenhauer, A. (2009). Estimation of synthetic accessibility 
+score of drug-like molecules based on molecular complexity and fragment contributions. 
+Journal of cheminformatics, 1(1), 8.
+"""
 
-#====== NP-likeliness
-
-
-def NP_score(smile):
-    mol = Chem.MolFromSmiles(smile)
-    fp = Chem.GetMorganFingerprint(mol, 2)
-    bits = fp.GetNonzeroElements()
-
-    # calculating the score
-    score = 0.
-    for bit in bits:
-        score += NP_model.get(bit, 0)
-    score /= float(mol.GetNumAtoms())
-
-    # preventing score explosion for exotic molecules
-    if score > 4:
-        score = 4. + math.log10(score - 4. + 1.)
-    if score < -4:
-        score = -4. - math.log10(-4. - score + 1.)
-    val = np.clip(remap(score, -3, 1), 0.0, 1.0)
-    return val
-
-
-def batch_NPLikeliness(smiles, train_smiles=None):
-    scores = [NP_score(s) if verify_sequence(s) else 0 for s in smiles]
+def batch_SA(smiles, train_smiles=None):
+    if SA_LOADED == False:
+        global SA_model
+        SA_model = readSAModel()
+        SA_LOADED = True
+    scores = [SA_score(s) for s in smiles]
     return scores
-#===== Synthetics Accesability score ===
 
+def readSAModel(filename='../data/SA_score.pkl.gz'):
+    print("mol_metrics: reading SA model ...")
+    start = time.time()
+    model_data = pickle.load(gzip.open(filename))
+    outDict = {}
+    for i in model_data:
+        for j in range(1, len(i)):
+            outDict[i[j]] = float(i[0])
+    SA_model = outDict
+    end = time.time()
+    print("loaded in {}".format(end - start))
+    return SA_model
 
 def SA_score(smile):
     mol = Chem.MolFromSmiles(smile)
+
     # fragment score
     fp = Chem.GetMorganFingerprint(mol, 2)
     fps = fp.GetNonzeroElements()
     score1 = 0.
     nf = 0
-    # for bitId, v in fps.items():
     for bitId, v in fps.items():
         nf += v
         sfp = bitId
@@ -526,20 +551,134 @@ def SA_score(smile):
     val = np.clip(val, 0.0, 1.0)
     return val
 
+#
+# 2.9. Drug-likeness
+#
 
-def batch_SA(smiles, train_smiles=None):
-    scores = [SA_score(s) for s in smiles]
+"""
+This metric computes the 'drug-likeness' of a given molecule through
+an equally ponderated mean of the following factors:
+
+    - Logarithm of the water-octanol partition coefficient
+    - Synthetic accesibility
+    - Conciseness of the molecule
+    - Soft novelty
+"""
+
+def batch_drugcandidate(smiles, train_smiles):
+    vals = [drug_candidate(s, train_smiles)
+            if verify_sequence(s) else 0 for s in smiles]
+    return vals
+
+def drug_candidate(smile, train_smiles):
+    good_logp = constant_bump(logP(smile), 0.210, 0.945)
+    sa = SA_score(smile)
+    novel = soft_novelty(smile, train_smiles)
+    compact = conciseness(smile)
+    val = (compact + good_logp + sa + novel) / 4.0
+    return val
+
+#
+# 2.10. NP-likeness
+#
+"""
+This metric computes the likelihood that a given molecule is
+a natural product.
+"""
+
+
+def batch_NPLikeliness(smiles, train_smiles=None):
+    if NP_LOADED == False:
+        global NP_model
+        NP_model = readNPModel()
+        NP_LOADED = True
+    scores = [NP_score(s) if verify_sequence(s) else 0 for s in smiles]
     return scores
 
-#===== PCE
+def readNPModel(filename='../data/NP_score.pkl.gz'):
+    print("mol_metrics: reading NP model ...")
+    start = time.time()
+    NP_model = pickle.load(gzip.open(filename))
+    end = time.time()
+    print("loaded in {}".format(end - start))
+    return NP_model
+
+def NP_score(smile):
+    mol = Chem.MolFromSmiles(smile)
+    fp = Chem.GetMorganFingerprint(mol, 2)
+    bits = fp.GetNonzeroElements()
+
+    # calculating the score
+    score = 0.
+    for bit in bits:
+        score += NP_model.get(bit, 0)
+    score /= float(mol.GetNumAtoms())
+
+    # preventing score explosion for exotic molecules
+    if score > 4:
+        score = 4. + math.log10(score - 4. + 1.)
+    if score < -4:
+        score = -4. - math.log10(-4. - score + 1.)
+    val = np.clip(remap(score, -3, 1), 0.0, 1.0)
+    return val
+
+#
+# 2.11. PCE
+#
+
+"""
+This metric computes the Power Conversion Efficiency of a organic
+solar cell built with a given molecule, using a CNN on a 64x64
+bit array containing Morgan fingerprints.
+"""
 
 def batch_PCE(smiles, train_smiles=None):
     cnn = cnn_pce()
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return vals
 
-#===== Reward function
+#
+# 2.12. Bandgap
+#
 
+"""
+This metric computes the HOMO-LUMO energy difference of a given 
+molecule,using a CNN on a 64x64 bit array containing Morgan fingerprints.
+"""
+
+def batch_bandgap(smiles, train_smiles=None):
+    cnn = cnn_homolumo()
+    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    return vals
+
+#
+# 2.13. Substructure match
+#
+
+"""
+This metric assigns 1.0 if a previously defined substructure (through the global 
+variable obj_substructure) is present in a given molecule, and 0.0 if not.
+"""
+
+def batch_substructure_match(smiles, train_smiles=None):
+    if substructure_match == None:
+        print('No substructure has been specified')
+        raise
+    vals = [substructure_match(smile, sub_mol=obj_substructure) if verify_sequence(smile) else 0.0 for smile in smiles]
+
+def substructure_match(smile, train_smiles=None, sub_mol=None):
+    mol = Chem.MolFromSmiles(smile)
+    val = mol.HasSubstructMatch(sub_mol)
+    return int(val)
+
+############################################
+#
+#   3. LOAD ALL REWARDS
+#
+#############################################
+#
+#
+#
 
 def load_reward(objective):
 
@@ -557,6 +696,8 @@ def load_reward(objective):
     metrics['synthesizability'] = batch_SA
     metrics['drug_candidate'] = batch_drugcandidate
     metrics['pce'] = batch_PCE
+    metrics['bandgap'] = batch_bandgap
+    metrics['substructure_match'] = batch_substructure_match
     if objective in metrics.keys():
         return metrics[objective]
     else:
