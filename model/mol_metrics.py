@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 from builtins import range
 import os
 import numpy as np
-import pubchempy as pcp
 import tensorflow as tf
 import csv
 import time
@@ -10,7 +9,6 @@ import pickle
 import gzip
 import math
 import random
-import cirpy
 import pymatgen as mg
 from rdkit import rdBase
 from rdkit import DataStructs
@@ -19,8 +17,6 @@ from rdkit.Chem import Crippen, MolFromSmiles, MolToSmiles
 from rdkit.Chem.Fingerprints import FingerprintMols
 from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 import rdkit.Chem.inchi as inchi
-from chemspipy import ChemSpider
-from chembl_webresource_client import *
 from cnn_metrics import cnn_pce, cnn_homolumo
 
 # Disables logs for Smiles conversion
