@@ -121,18 +121,18 @@ def model_cnn32(features, targets, mode):
     output = tf.layers.dense(
         inputs=dense,
         units=1,
-                activation=tf.nn.relu)
+        activation=tf.nn.relu)
 
     loss = None
     train_op = None
     prediction_values = tf.reshape(output, [-1])
     predictions = {"output": prediction_values}
-    
+
     if mode != learn.ModeKeys.INFER:
         loss = tf.losses.mean_squared_error(
         targets,
         prediction_values)
-    
+
     if mode == learn.ModeKeys.TRAIN:
         targets = tf.cast(targets, tf.float32)
         train_op = tf.contrib.layers.optimize_loss(
@@ -140,7 +140,7 @@ def model_cnn32(features, targets, mode):
         global_step=tf.contrib.framework.get_global_step(),
         learning_rate=0.001,
         optimizer="SGD")
-    
+
     model = model_fn.ModelFnOps(
         mode = mode,
         predictions = predictions,
@@ -151,11 +151,13 @@ def model_cnn32(features, targets, mode):
 
 class cnn_pce(object):
 
-    def __init__(self, lbit=64):
+    def __init__(self, lbit=32):
         if lbit == 64:
-            self.cnn = learn.Estimator(model_fn=model_cnn64, model_dir='../data/cnn_pce64/')
+            self.cnn = learn.Estimator(model_fn=model_cnn64, model_dir='neuralnets/pce/64bit')
+            self.nbits = 4096
         elif lbit == 32:
-            self.cnn = learn.Estimator(model_fn=model_cnn32, model_dir='../data/cnn_pce32/')
+            self.cnn = learn.Estimator(model_fn=model_cnn32, model_dir='neuralnets/pce/32bit')
+            self.nbits = 1024
         else:
             print("Unexpected number of bits")
             raise
@@ -163,7 +165,7 @@ class cnn_pce(object):
     def predict(self, smile):
 
         mol = Chem.MolFromSmiles(smile)
-        fp = np.asarray(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=4096))
+        fp = np.asarray(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=self.nbits))
         data_x = np.array([fp])
 
         def input_predict(features):
@@ -173,7 +175,6 @@ class cnn_pce(object):
                 return all_x
 
             return _input_fn
-
         predictions = self.cnn.predict(input_fn=input_predict(data_x))
         data_y = self.itToList(predictions)
         return data_y
@@ -183,11 +184,13 @@ class cnn_pce(object):
 
 class cnn_homolumo(object):
 
-    def __init__(self, lbit=64):
+    def __init__(self, lbit=32):
         if lbit == 64:
-            self.cnn = learn.Estimator(model_fn=model_homolumo64, model_dir='../data/cnn_homolumo64/')
+            self.cnn = learn.Estimator(model_fn=model_cnn64, model_dir='neuralnets/bandgap/64bit')
+            self.nbits = 4096
         elif lbit == 32:
-            self.cnn = learn.Estimator(model_fn=model_homolumo32, model_dir='../data/cnn_homolumo32/')
+            self.cnn = learn.Estimator(model_fn=model_cnn32, model_dir='neuralnets/bandgap/32bit')
+            self.nbits = 1024
         else:
             print("Unexpected number of bits")
             raise
@@ -195,7 +198,7 @@ class cnn_homolumo(object):
     def predict(self, smile):
 
         mol = Chem.MolFromSmiles(smile)
-        fp = np.asarray(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=4096))
+        fp = np.asarray(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=self.nbits))
         data_x = np.array([fp])
 
         def input_predict(features):
@@ -205,7 +208,6 @@ class cnn_homolumo(object):
                 return all_x
 
             return _input_fn
-
         predictions = self.cnn.predict(input_fn=input_predict(data_x))
         data_y = self.itToList(predictions)
         return data_y
@@ -213,9 +215,106 @@ class cnn_homolumo(object):
     def itToList(self, predictions):
         return sum([p['output'] for p in predictions])
 
+class cnn_density(object):
 
-#cnn = cnn_homolumo()
-#cnn.train()
+    def __init__(self, lbit=32):
+        if lbit == 64:
+            self.cnn = learn.Estimator(model_fn=model_cnn64, model_dir='neuralnets/density/64bit')
+            self.nbits = 4096
+        elif lbit == 32:
+            self.cnn = learn.Estimator(model_fn=model_cnn32, model_dir='neuralnets/density/32bit')
+            self.nbits = 1024
+        else:
+            print("Unexpected number of bits")
+            raise
+
+    def predict(self, smile):
+
+        mol = Chem.MolFromSmiles(smile)
+        fp = np.asarray(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=self.nbits))
+        data_x = np.array([fp])
+
+        def input_predict(features):
+
+            def _input_fn():
+                all_x = tf.constant(features, shape=features.shape, dtype=tf.float32)
+                return all_x
+
+            return _input_fn
+        predictions = self.cnn.predict(input_fn=input_predict(data_x))
+        data_y = self.itToList(predictions)
+        return data_y
+
+    def itToList(self, predictions):
+        return sum([p['output'] for p in predictions])
+
+class cnn_mp(object):
+
+    def __init__(self, lbit=32):
+        if lbit == 64:
+            self.cnn = learn.Estimator(model_fn=model_cnn64, model_dir='neuralnets/mp/64bit')
+            self.nbits = 4096
+        elif lbit == 32:
+            self.cnn = learn.Estimator(model_fn=model_cnn32, model_dir='neuralnets/mp/32bit')
+            self.nbits = 1024
+        else:
+            print("Unexpected number of bits")
+            raise
+
+    def predict(self, smile):
+
+        mol = Chem.MolFromSmiles(smile)
+        fp = np.asarray(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=self.nbits))
+        data_x = np.array([fp])
+
+        def input_predict(features):
+
+            def _input_fn():
+                all_x = tf.constant(features, shape=features.shape, dtype=tf.float32)
+                return all_x
+
+            return _input_fn
+        predictions = self.cnn.predict(input_fn=input_predict(data_x))
+        data_y = self.itToList(predictions)
+        return data_y
+
+    def itToList(self, predictions):
+        return sum([p['output'] for p in predictions])
+
+class cnn_mutagenicity(object):
+
+    def __init__(self, lbit=32):
+        if lbit == 64:
+            self.cnn = learn.Estimator(model_fn=model_cnn64, model_dir='neuralnets/mutagenicity/64bit')
+            self.nbits = 4096
+        elif lbit == 32:
+            self.cnn = learn.Estimator(model_fn=model_cnn32, model_dir='neuralnets/mutagenicity/32bit')
+            self.nbits = 1024
+        else:
+            print("Unexpected number of bits")
+            raise
+
+    def predict(self, smile):
+
+        mol = Chem.MolFromSmiles(smile)
+        fp = np.asarray(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=self.nbits))
+        data_x = np.array([fp])
+
+        def input_predict(features):
+
+            def _input_fn():
+                all_x = tf.constant(features, shape=features.shape, dtype=tf.float32)
+                return all_x
+
+            return _input_fn
+        predictions = self.cnn.predict(input_fn=input_predict(data_x))
+        data_y = self.itToList(predictions)
+        return data_y
+
+    def itToList(self, predictions):
+        return sum([p['output'] for p in predictions])
+
+#cnn = cnn_homolumo(64)
 #data = pd.read_csv('../data/opv.csv')
 #smiles_text = data['smiles'][10000:10010]
 #homo = data['homo_calib'][10000:10010]
@@ -229,3 +328,16 @@ class cnn_homolumo(object):
 #    print('Real: {:4}, Predicted: {:4}, Error: {:4}'.format(hl[i], p, error[i]))
 #
 #print(np.mean(error*0.0367493*627.509391))
+
+#cnn = cnn_pce(32)
+#data = pd.read_csv('../data/opv.csv')
+#smiles_text = data['smiles'][10000:10010]
+#pce = np.asarray(data['PCE_calib'][10000:10010])
+#
+#error = np.zeros(len(smiles_text))
+#for i, smile in enumerate(smiles_text):
+#    p = cnn.predict(smile)
+#    error[i] = abs(pce[i] - p)
+#    #print('Real: {:4}, Predicted: {:4}, Error: {:4}'.format(pce[i], p, error[i]))
+#
+#print(np.mean(error))

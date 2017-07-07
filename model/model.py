@@ -1,12 +1,13 @@
 import tensorflow as tf
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
-
 from tensorflow.contrib import legacy_seq2seq
 
 class LSTM(object):
+
     def __init__(self, num_emb, batch_size, emb_dim, hidden_dim,
                  sequence_length, start_token,
                  learning_rate=0.01, reward_gamma=0.95):
+
         self.num_emb = num_emb
         self.batch_size = batch_size
         self.emb_dim = emb_dim
@@ -19,7 +20,6 @@ class LSTM(object):
         self.d_params = []
         self.temperature = 1.0
         self.grad_clip = 5.0
-
         self.expected_reward = tf.Variable(tf.zeros([self.sequence_length]))
 
         with tf.variable_scope('generator'):

@@ -1,5 +1,5 @@
 {
-    "EXP_NAME":"toy-variety-2",
+    "EXP_NAME":"toy-profiling",
     "TRAIN_FILE":"../data/toy.csv",
     "METRICS_FILE":"mol_metrics",
     "LAMBDA" : 0.5,
@@ -15,16 +15,10 @@
     "EPOCH_SAVES":2,
     "OBJECTIVE":
     [
-        "novelty",
-        "conciseness",
-        "diversity",
-        "lipinski"
+        "novelty"
     ],
     "TOTAL_BATCH":
     [
-        10,
-        10,
-        10,
-        50
+        2
     ]
 }

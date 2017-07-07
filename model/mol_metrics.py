@@ -10,6 +10,7 @@ import gzip
 import math
 import random
 import pymatgen as mg
+import rdkit
 from rdkit import rdBase
 from rdkit import DataStructs
 from rdkit.Chem import AllChem as Chem
@@ -18,6 +19,7 @@ from rdkit.Chem.Fingerprints import FingerprintMols
 from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 import rdkit.Chem.inchi as inchi
 from cnn_metrics import cnn_pce, cnn_homolumo
+from beauty import chemical_beauty
 
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
@@ -41,12 +43,29 @@ rdBase.DisableLog('rdApp.error')
 # 1.1. Loading models
 #
 
-global NP_LOADED, SA_LOADED
-NP_LOADED = False
-SA_LOADED = False
+def readNPModel(filename='NP_score.pkl.gz'):
+    print("mol_metrics: reading NP model ...")
+    start = time.time()
+    NP_model = pickle.load(gzip.open(filename))
+    end = time.time()
+    print("loaded in {}".format(end - start))
+    return NP_model
 
-global BITSIDE
-BITSIDE = 64
+def readSAModel(filename='SA_score.pkl.gz'):
+    print("mol_metrics: reading SA model ...")
+    start = time.time()
+    model_data = pickle.load(gzip.open(filename))
+    outDict = {}
+    for i in model_data:
+        for j in range(1, len(i)):
+            outDict[i[j]] = float(i[0])
+    SA_model = outDict
+    end = time.time()
+    print("loaded in {}".format(end - start))
+    return SA_model
+
+SA_model = readSAModel()
+NP_model = readNPModel()
 
 #
 # 1.2. Loading utilities
@@ -470,7 +489,6 @@ def batch_conciseness(smiles, train_smiles=None):
     vals = [conciseness(s) if verify_sequence(s) else 0 for s in smiles]
     return vals
 
-
 def conciseness(smile, train_smiles=None):
     canon = canon_smile(smile)
     diff_len = len(smile) -len(canon)
@@ -493,25 +511,8 @@ Journal of cheminformatics, 1(1), 8.
 """
 
 def batch_SA(smiles, train_smiles=None):
-    if SA_LOADED == False:
-        global SA_model
-        SA_model = readSAModel()
-        SA_LOADED = True
     scores = [SA_score(s) for s in smiles]
     return scores
-
-def readSAModel(filename='../data/SA_score.pkl.gz'):
-    print("mol_metrics: reading SA model ...")
-    start = time.time()
-    model_data = pickle.load(gzip.open(filename))
-    outDict = {}
-    for i in model_data:
-        for j in range(1, len(i)):
-            outDict[i[j]] = float(i[0])
-    SA_model = outDict
-    end = time.time()
-    print("loaded in {}".format(end - start))
-    return SA_model
 
 def SA_score(smile):
     mol = Chem.MolFromSmiles(smile)
@@ -614,15 +615,15 @@ This metric assigns 1.0 if the molecule follows Lipinski's rule of
 five and 0.0 if not.
 """
 
-def batch_lipinski(smile, train_smiles):
+def batch_lipinski(smiles, train_smiles):
     vals = [Lipinski(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return vals
 
 def Lipinski(smile):
     mol = Chem.MolFromSmiles(smile)
     druglikeness = 0.0
-    druglikeness += 0.25 if logP(mol) == 0 else 0.0
-    druglikeness += 0.25 if Chem.Descriptors.MolWt(mol) <= 500 else 0.0
+    druglikeness += 0.25 if logP(smile) <= 5 else 0.0
+    druglikeness += 0.25 if rdkit.Chem.Descriptors.MolWt(mol) <= 500 else 0.0
     # Look for hydrogen bond aceptors
     acceptors = 0
     for atom in mol.GetAtoms():
@@ -650,20 +651,8 @@ a natural product.
 
 
 def batch_NPLikeliness(smiles, train_smiles=None):
-    if NP_LOADED == False:
-        global NP_model
-        NP_model = readNPModel()
-        NP_LOADED = True
     scores = [NP_score(s) if verify_sequence(s) else 0 for s in smiles]
     return scores
-
-def readNPModel(filename='../data/NP_score.pkl.gz'):
-    print("mol_metrics: reading NP model ...")
-    start = time.time()
-    NP_model = pickle.load(gzip.open(filename))
-    end = time.time()
-    print("loaded in {}".format(end - start))
-    return NP_model
 
 def NP_score(smile):
     mol = Chem.MolFromSmiles(smile)
@@ -690,14 +679,14 @@ def NP_score(smile):
 
 """
 This metric computes the Power Conversion Efficiency of a organic
-solar cell built with a given molecule, using a CNN on a 64x64
+solar cell built with a given molecule, using a CNN on a 64x64/32x32
 bit array containing Morgan fingerprints.
 """
 
 def batch_PCE(smiles, train_smiles=None):
-    cnn = cnn_pce(lbit=BITSIDE)
+    cnn = cnn_pce(lbit=32)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
-    return vals
+    return remap(vals, np.amin(vals), np.amax(vals))
 
 #
 # 2.14. Bandgap
@@ -705,13 +694,13 @@ def batch_PCE(smiles, train_smiles=None):
 
 """
 This metric computes the HOMO-LUMO energy difference of a given 
-molecule,using a CNN on a 64x64 bit array containing Morgan fingerprints.
+molecule,using a CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
 """
 
 def batch_bandgap(smiles, train_smiles=None):
-    cnn = cnn_homolumo(lbit=BITSIDE)
+    cnn = cnn_homolumo(lbit=32)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
-    return vals
+    return remap(vals, np.amin(vals), np.amax(vals))
 
 #
 # 2.15. Substructure match
@@ -732,6 +721,75 @@ def substructure_match(smile, train_smiles=None, sub_mol=None):
     mol = Chem.MolFromSmiles(smile)
     val = mol.HasSubstructMatch(sub_mol)
     return int(val)
+
+#
+# 2.16. Chemical beauty
+#
+
+"""
+Bickerton, G. R., Paolini, G. V., Besnard, J., Muresan, S., & Hopkins, A. L. (2012). Quantifying the chemical beauty of drugs. Nature chemistry, 4(2), 90-98.
+"""
+
+def batch_beauty(smiles, train_smiles=None):
+    vals = [beauty(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    return vals
+
+def beauty(smile):
+    return chemical_beauty(Chem.MolFromSmiles(smile))
+
+#
+# 2.17. Density
+#
+
+"""
+This metric computes the density of a given molecule, using a CNN 
+on a 64x64/32x32 bit array containing Morgan fingerprints.
+"""
+
+def batch_density(smiles, train_smiles=None):
+    cnn = cnn_density(lbit=32)
+    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    return remap(vals, np.amin(vals), np.amax(vals))
+
+#
+# 2.18. Melting point
+#
+
+"""
+This metric computes the melting point of a given  molecule, using a 
+CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
+"""
+
+def batch_mp(smiles, train_smiles=None):
+    cnn = cnn_mp(lbit=32)
+    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    return remap(vals, np.amin(vals), np.amax(vals))
+
+#
+# 2.19. Melting point
+#
+
+"""
+This metric computes the mutagenicity of a given  molecule, using a 
+CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
+"""
+
+def batch_mp(smiles, train_smiles=None):
+    cnn = cnn_mp(lbit=32)
+    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    return remap(vals, np.amin(vals), np.amax(vals))
+
+#
+#  COMBINATIONS
+#
+
+def batch_logPSA(smiles, train_smiles=None):
+    vals = [0.5*logP(smile)+0.5*SA_score(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    return vals
+
+def batch_NPSA(smiles, train_smiles=None):
+    vals = [0.5*NP_score(smile)+0.5*SA_score(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    return vals
 
 ############################################
 #
@@ -762,6 +820,10 @@ def load_reward(objective):
     metrics['pce'] = batch_PCE
     metrics['bandgap'] = batch_bandgap
     metrics['substructure_match'] = batch_substructure_match
+    metrics['chemical_beauty'] = batch_beauty
+    metrics['logPSA'] = batch_logPSA
+    metrics['NPSA'] = batch_NPSA
+
     if objective in metrics.keys():
         return metrics[objective]
     else:
