@@ -1,4 +1,10 @@
 from __future__ import absolute_import, division, print_function
+# get free gpu
+from gpu_utils import pick_gpu_lowest_memory
+gpu_free_number = str(pick_gpu_lowest_memory())
+# set enviroment variables
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
 from builtins import range
 from collections import OrderedDict
 import os
@@ -54,7 +60,7 @@ if (type(BATCHES) is list) or (type(OBJECTIVE) is list):
 
     i = 0
     education = {}
-    for j,stage in enumerate(BATCHES):
+    for j, stage in enumerate(BATCHES):
         for _ in range(stage):
             education[i] = OBJECTIVE[j]
             i += 1
@@ -96,6 +102,7 @@ def run_command(cmd):
         cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     return output.decode("ascii")
 
+
 def list_available_gpus():
     output = run_command("nvidia-smi -L")
     gpu_regex = re.compile(r"GPU (?P<gpu_id>\d+):")
@@ -105,6 +112,7 @@ def list_available_gpus():
         assert m, "Couldnt parse " + line
         result.append(int(m.group("gpu_id")))
     return result
+
 
 def gpu_memory_map():
     output = run_command("nvidia-smi")
@@ -122,6 +130,7 @@ def gpu_memory_map():
         result[gpu_id] += gpu_memory
     return result
 
+
 def pick_gpu_lowest_memory():
     memory_gpu_map = [(memory, gpu_id)
                       for (gpu_id, memory) in gpu_memory_map().items()]
@@ -129,6 +138,7 @@ def pick_gpu_lowest_memory():
     return best_gpu
 
 #============= Objective ==============
+
 
 def make_reward(train_samples, nbatch):
 
@@ -169,7 +179,7 @@ def print_rewards(rewards):
     print(rewards)
     mean_r, std_r = np.mean(rewards), np.std(rewards)
     min_r, max_r = np.min(rewards), np.max(rewards)
-    print('Mean: {:.3f} , Std:  {:.3f}'.format(mean_r, std_r),end='')
+    print('Mean: {:.3f} , Std:  {:.3f}'.format(mean_r, std_r), end='')
     print(', Min: {:.3f} , Max:  {:.3f}\n'.format(min_r, max_r))
     np.set_printoptions(precision=8, suppress=False)
     return
@@ -196,6 +206,7 @@ print('Size of alphabet is       {:7d}'.format(NUM_EMB))
 
 mm.print_params(params)
 ##########################################################################
+
 
 class Generator(model.LSTM):
 
@@ -281,7 +292,8 @@ def save_results(sess, folder, name, results_rows=None, nbatch=None):
     loc_ckpt_dir = os.path.join(os.getcwd(), folder)
     if not os.path.exists(loc_ckpt_dir):
         os.makedirs(loc_ckpt_dir)
-    loc_ckpt_file = os.path.join(loc_ckpt_dir, '{}_{}.ckpt'.format(name, label))
+    loc_ckpt_file = os.path.join(
+        loc_ckpt_dir, '{}_{}.ckpt'.format(name, label))
     path = model_saver.save(sess, loc_ckpt_file)
     print('Model saved at {}'.format(path))
     shutil.copy(loc_ckpt_file, ext_ckpt_dir)
@@ -323,7 +335,6 @@ def main():
         dis_grads_and_vars, global_step=dis_global_step)
 
     config = tf.ConfigProto()
-    # config.gpu_options.per_process_gpu_memory_fraction = 0.5
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
 
