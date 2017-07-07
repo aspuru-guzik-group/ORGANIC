@@ -1,20 +1,26 @@
 import tensorflow as tf
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
+from tensorflow.contrib import legacy_seq2seq
 
+class LSTM(object):
 
-class TARGET_LSTM(object):
     def __init__(self, num_emb, batch_size, emb_dim, hidden_dim,
-                 sequence_length, start_token):
+                 sequence_length, start_token,
+                 learning_rate=0.01, reward_gamma=0.95):
+
         self.num_emb = num_emb
         self.batch_size = batch_size
         self.emb_dim = emb_dim
         self.hidden_dim = hidden_dim
         self.sequence_length = sequence_length
         self.start_token = tf.constant([start_token] * self.batch_size, dtype=tf.int32)
+        self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
+        self.reward_gamma = reward_gamma
         self.g_params = []
+        self.d_params = []
         self.temperature = 1.0
-
-        tf.set_random_seed(66)
+        self.grad_clip = 5.0
+        self.expected_reward = tf.Variable(tf.zeros([self.sequence_length]))
 
         with tf.variable_scope('generator'):
             self.g_embeddings = tf.Variable(self.init_matrix([self.num_emb, self.emb_dim]))
@@ -26,6 +32,9 @@ class TARGET_LSTM(object):
         self.x = tf.placeholder(tf.int32, shape=[self.batch_size, self.sequence_length])
         # sequence of indices of true data, not including start token
 
+        self.rewards = tf.placeholder(tf.float32, shape=[self.batch_size, self.sequence_length])
+        # get from rollout policy and discriminator
+
         # processed for batch
         with tf.device("/cpu:0"):
             inputs = tf.split(axis=1, num_or_size_splits=self.sequence_length, value=tf.nn.embedding_lookup(self.g_embeddings, self.x))
@@ -35,7 +44,6 @@ class TARGET_LSTM(object):
         self.h0 = tf.zeros([self.batch_size, self.hidden_dim])
         self.h0 = tf.stack([self.h0, self.h0])
 
-        # generator on initial randomness
         gen_o = tensor_array_ops.TensorArray(dtype=tf.float32, size=self.sequence_length,
                                              dynamic_size=False, infer_shape=True)
         gen_x = tensor_array_ops.TensorArray(dtype=tf.int32, size=self.sequence_length,
@@ -66,48 +74,83 @@ class TARGET_LSTM(object):
             dtype=tf.float32, size=self.sequence_length,
             dynamic_size=False, infer_shape=True)
 
+        g_logits = tensor_array_ops.TensorArray(
+            dtype=tf.float32, size=self.sequence_length,
+            dynamic_size=False, infer_shape=True)
+
         ta_emb_x = tensor_array_ops.TensorArray(
             dtype=tf.float32, size=self.sequence_length)
         ta_emb_x = ta_emb_x.unstack(self.processed_x)
 
-        def _pretrain_recurrence(i, x_t, h_tm1, g_predictions):
+        def _pretrain_recurrence(i, x_t, h_tm1, g_predictions, g_logits):
             h_t = self.g_recurrent_unit(x_t, h_tm1)
             o_t = self.g_output_unit(h_t)
             g_predictions = g_predictions.write(i, tf.nn.softmax(o_t))  # batch x vocab_size
+            g_logits = g_logits.write(i, o_t)  # batch x vocab_size
             x_tp1 = ta_emb_x.read(i)
-            return i + 1, x_tp1, h_t, g_predictions
+            return i + 1, x_tp1, h_t, g_predictions, g_logits
 
-        _, _, _, self.g_predictions = control_flow_ops.while_loop(
-            cond=lambda i, _1, _2, _3: i < self.sequence_length,
+        _, _, _, self.g_predictions, self.g_logits = control_flow_ops.while_loop(
+            cond=lambda i, _1, _2, _3, _4: i < self.sequence_length,
             body=_pretrain_recurrence,
             loop_vars=(tf.constant(0, dtype=tf.int32),
                        tf.nn.embedding_lookup(self.g_embeddings, self.start_token),
-                       self.h0, g_predictions))
+                       self.h0, g_predictions, g_logits))
 
         self.g_predictions = tf.transpose(
             self.g_predictions.stack(), perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
 
+        self.g_logits = tf.transpose(
+            self.g_logits.stack(), perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
         # pretraining loss
         self.pretrain_loss = -tf.reduce_sum(
             tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
-                tf.reshape(self.g_predictions, [-1, self.num_emb]))) / (self.sequence_length * self.batch_size)
+                tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_emb]), 1e-20, 1.0)
+            )
+        ) / (self.sequence_length * self.batch_size)
 
-        self.out_loss = tf.reduce_sum(
-            tf.reshape(
-                -tf.reduce_sum(
-                    tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
-                        tf.reshape(self.g_predictions, [-1, self.num_emb])), 1
-                ), [-1, self.sequence_length]
-            ), 1
-        )  # batch_size
+        # training updates
+        pretrain_opt = self.g_optimizer(self.learning_rate)
+
+        self.pretrain_grad, _ = tf.clip_by_global_norm(
+            tf.gradients(self.pretrain_loss, self.g_params), self.grad_clip)
+        self.pretrain_updates = pretrain_opt.apply_gradients(zip(self.pretrain_grad, self.g_params))
+
+        #######################################################################################################
+        #  Unsupervised Training
+        #######################################################################################################
+        self.g_loss = -tf.reduce_sum(
+            tf.reduce_sum(
+                tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
+                    tf.clip_by_value(tf.reshape(self.g_predictions, [-1, self.num_emb]), 1e-20, 1.0)
+                ), 1) * tf.reshape(self.rewards, [-1])
+        )
+
+        g_opt = self.g_optimizer(self.learning_rate)
+
+        self.g_grad, _ = tf.clip_by_global_norm(
+            tf.gradients(self.g_loss, self.g_params), self.grad_clip)
+        self.g_updates = g_opt.apply_gradients(zip(self.g_grad, self.g_params))
 
     def generate(self, session):
-        # h0 = np.random.normal(size=self.hidden_dim)
         outputs = session.run([self.gen_x])
         return outputs[0]
 
+    def pretrain_step(self, session, x):
+        outputs = session.run([self.pretrain_updates, self.pretrain_loss, self.g_predictions],
+                              feed_dict={self.x: x})
+        return outputs
+
+    def generator_step(self, sess, samples, rewards):
+        feed = {self.x: samples, self.rewards: rewards}
+        _, g_loss = sess.run([self.g_updates, self.g_loss], feed_dict=feed)
+        return g_loss
+
     def init_matrix(self, shape):
-        return tf.random_normal(shape, stddev=1.0)
+        return tf.random_normal(shape, stddev=0.1)
+
+    def init_vector(self, shape):
+        return tf.zeros(shape)
 
     def create_recurrent_unit(self, params):
         # Weights and Bias for input and hidden tensor
@@ -182,3 +225,6 @@ class TARGET_LSTM(object):
             return logits
 
         return unit
+
+    def g_optimizer(self, *args, **kwargs):
+        return tf.train.GradientDescentOptimizer(*args, **kwargs)

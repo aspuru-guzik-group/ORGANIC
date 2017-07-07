@@ -2,6 +2,12 @@
 __pycache__/
 *.py[cod]
 *$py.class
+# tf stuff
+*/checkpoints/*
+*.ckpt-*
+events.out.*
+data/*
+*.pbtxt 
 
 # C extensions
 *.so

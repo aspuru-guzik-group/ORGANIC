@@ -1,18 +1,24 @@
 {
-    "EXP_NAME":"toy",
+    "EXP_NAME":"toy-profiling",
     "TRAIN_FILE":"../data/toy.csv",
     "METRICS_FILE":"mol_metrics",
-    "OBJECTIVE":"novelty",
     "LAMBDA" : 0.5,
     "CHK_PATH" : "checkpoints",
     "G_STEPS" : 1,
     "SEED":88,
-    "G_PRETRAIN_STEPS":240,
-    "D_PRETRAIN_STEPS":50,
-    "TOTAL_BATCH":2,
+    "G_PRETRAIN_STEPS":2,
+    "D_PRETRAIN_STEPS":2,
     "MAX_LENGTH":40,
-    "BATCH_SIZE":64,
+    "BATCH_SIZE":1,
     "LOAD_PRETRAIN":true,
     "LOAD_PREV_SESS":true,
-    "EPOCH_SAVES":20
+    "EPOCH_SAVES":2,
+    "OBJECTIVE":
+    [
+        "novelty"
+    ],
+    "TOTAL_BATCH":
+    [
+        2
+    ]
 }

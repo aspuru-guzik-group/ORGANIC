@@ -12,42 +12,58 @@ from gen_dataloader import Gen_Data_loader
 from dis_dataloader import Dis_dataloader
 from text_classifier import TextCNN
 from rollout import ROLLOUT
-from target_lstm import TARGET_LSTM
-# import io_utils
 import pandas as pd
 import importlib
 import sys
+import shutil
 from tqdm import tqdm
-
 
 if len(sys.argv) == 2:
     PARAM_FILE = sys.argv[1]
 else:
     PARAM_FILE = 'exp.json'
 params = json.loads(open(PARAM_FILE).read(), object_pairs_hook=OrderedDict)
+
 ##########################################################################
 #  Training  Hyper-parameters
 ##########################################################################
-# load metrics file
 mm = importlib.import_module(params['METRICS_FILE'])
-
-## Load metrics file
-#if params['METRICS_FILE'] == 'mol_metrics':
-#    mm = mol_metrics
-#elif params['METRICS_FILE'] == 'music_metrics':
-#    mm = music_metrics
-#else:
-#    raise ValueError('Metrics file unknown!')
 
 PREFIX = params['EXP_NAME']
 PRE_EPOCH_NUM = params['G_PRETRAIN_STEPS']
 TRAIN_ITER = params['G_STEPS']  # generator
-SEED = params['SEED']
 BATCH_SIZE = params["BATCH_SIZE"]
-TOTAL_BATCH = params['TOTAL_BATCH']
+SEED = params['SEED']
 dis_batch_size = 64
 dis_num_epochs = 3
 dis_alter_epoch = params['D_PRETRAIN_STEPS']
+
+BATCHES = params['TOTAL_BATCH']
+OBJECTIVE = params['OBJECTIVE']
+
+if (type(BATCHES) is list) or (type(OBJECTIVE) is list):
+
+    TRAINING_PROGRAM = True
+    if type(OBJECTIVE) is not list or type(BATCHES) is not list:
+        print("Unmatching training program parameters")
+        raise
+    if len(OBJECTIVE) != len(BATCHES):
+        print("Unmatching training program parameters")
+        raise
+    TOTAL_BATCH = np.sum(np.asarray(BATCHES))
+
+    i = 0
+    education = {}
+    for j,stage in enumerate(BATCHES):
+        for _ in range(stage):
+            education[i] = OBJECTIVE[j]
+            i += 1
+else:
+    TRAINING_PROGRAM = False
+    TOTAL_BATCH = BATCHES
+
+
+##########################################################################
 
 ##########################################################################
 #  Generator  Hyper-parameters
@@ -62,7 +78,6 @@ D_WEIGHT = params['LAMBDA']
 D = max(int(5 * D_WEIGHT), 1)
 ##########################################################################
 
-
 ##########################################################################
 #  Discriminator  Hyper-parameters
 ##########################################################################
@@ -71,24 +86,81 @@ dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
 dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
 dis_dropout_keep_prob = 0.75
 dis_l2_reg_lambda = 0.2
+##########################################################################
+
+
+#============= GPU Configuration ==============
+
+def run_command(cmd):
+    output = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
+    return output.decode("ascii")
+
+def list_available_gpus():
+    output = run_command("nvidia-smi -L")
+    gpu_regex = re.compile(r"GPU (?P<gpu_id>\d+):")
+    result = []
+    for line in output.strip().split("\n"):
+        m = gpu_regex.match(line)
+        assert m, "Couldnt parse " + line
+        result.append(int(m.group("gpu_id")))
+    return result
+
+def gpu_memory_map():
+    output = run_command("nvidia-smi")
+    gpu_output = output[output.find("GPU Memory"):]
+    memory_regex = re.compile(
+        r"[|]\s+?(?P<gpu_id>\d+)\D+?(?P<pid>\d+).+[ ](?P<gpu_memory>\d+)MiB")
+    rows = gpu_output.split("\n")
+    result = {gpu_id: 0 for gpu_id in list_available_gpus()}
+    for row in gpu_output.split("\n"):
+        m = memory_regex.search(row)
+        if not m:
+            continue
+        gpu_id = int(m.group("gpu_id"))
+        gpu_memory = int(m.group("gpu_memory"))
+        result[gpu_id] += gpu_memory
+    return result
+
+def pick_gpu_lowest_memory():
+    memory_gpu_map = [(memory, gpu_id)
+                      for (gpu_id, memory) in gpu_memory_map().items()]
+    best_memory, best_gpu = sorted(memory_gpu_map)[0]
+    return best_gpu
 
 #============= Objective ==============
 
-reward_func = mm.load_reward(params['OBJECTIVE'])
+def make_reward(train_samples, nbatch):
 
+    if TRAINING_PROGRAM == False:
 
-def make_reward(train_samples):
+        reward_func = mm.load_reward(OBJECTIVE)
 
-    def batch_reward(samples):
-        decoded = [mm.decode(sample, ord_dict) for sample in samples]
-        pct_unique = len(list(set(decoded))) / float(len(decoded))
-        rewards = reward_func(decoded, train_samples)
-        weights = np.array([pct_unique / float(decoded.count(sample))
-                            for sample in decoded])
+        def batch_reward(samples):
+            decoded = [mm.decode(sample, ord_dict) for sample in samples]
+            pct_unique = len(list(set(decoded))) / float(len(decoded))
+            rewards = reward_func(decoded, train_samples)
+            weights = np.array([pct_unique / float(decoded.count(sample))
+                                for sample in decoded])
 
-        return rewards * weights
+            return rewards * weights
 
-    return batch_reward
+        return batch_reward
+
+    else:
+
+        reward_func = mm.load_reward(education[nbatch])
+
+        def batch_reward(samples):
+            decoded = [mm.decode(sample, ord_dict) for sample in samples]
+            pct_unique = len(list(set(decoded))) / float(len(decoded))
+            rewards = reward_func(decoded, train_samples)
+            weights = np.array([pct_unique / float(decoded.count(sample))
+                                for sample in decoded])
+
+            return rewards * weights
+
+        return batch_reward
 
 
 def print_rewards(rewards):
@@ -122,10 +194,7 @@ print('Avg length to use is      {:7f}'.format(
 print('Num valid data points is  {:7d}'.format(POSITIVE_NUM))
 print('Size of alphabet is       {:7d}'.format(NUM_EMB))
 
-
 mm.print_params(params)
-
-
 ##########################################################################
 
 class Generator(model.LSTM):
@@ -146,18 +215,6 @@ def generate_samples(sess, trainable_model, batch_size, generated_num, verbose=F
     return generated_samples
 
 
-def target_loss(sess, target_lstm, data_loader):
-    supervised_g_losses = []
-    data_loader.reset_pointer()
-
-    for it in range(data_loader.num_batch):
-        batch = data_loader.next_batch()
-        g_loss = sess.run(target_lstm.pretrain_loss, {target_lstm.x: batch})
-        supervised_g_losses.append(g_loss)
-
-    return np.mean(supervised_g_losses)
-
-
 def pre_train_epoch(sess, trainable_model, data_loader):
     supervised_g_losses = []
     data_loader.reset_pointer()
@@ -174,8 +231,8 @@ def pre_train_epoch(sess, trainable_model, data_loader):
 likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)
 
 
-def pretrain(sess, generator, target_lstm, train_discriminator):
-    # samples = generate_samples(sess, target_lstm, BATCH_SIZE, generated_num)
+def pretrain(sess, generator, train_discriminator):
+    # samples = generate_samples(sess, BATCH_SIZE, generated_num)
     gen_data_loader = Gen_Data_loader(BATCH_SIZE)
     gen_data_loader.create_batches(positive_samples)
     results = OrderedDict({'exp_name': PREFIX})
@@ -189,13 +246,11 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
         if epoch == 10 or epoch % 40 == 0:
             samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
             likelihood_data_loader.create_batches(samples)
-            test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-            print('\t test_loss {}, train_loss {}'.format(test_loss, loss))
+            print('\t train_loss {}'.format(loss))
             mm.compute_results(samples, train_samples, ord_dict, results)
 
     samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
     likelihood_data_loader.create_batches(samples)
-    test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
 
     samples = generate_samples(sess, generator, BATCH_SIZE, SAMPLE_NUM)
     likelihood_data_loader.create_batches(samples)
@@ -209,18 +264,28 @@ def pretrain(sess, generator, target_lstm, train_discriminator):
     return
 
 
-def save_results(sess, folder, name, results_rows=None):
+def save_results(sess, folder, name, results_rows=None, nbatch=None):
     if results_rows is not None:
         df = pd.DataFrame(results_rows)
         df.to_csv('{}_results.csv'.format(folder), index=False)
+    if nbatch is not None:
+        label = 'final'
+    else:
+        label = str(nbatch)
+
     # save models
     model_saver = tf.train.Saver()
-    ckpt_dir = os.path.join(params['CHK_PATH'], folder)
-    if not os.path.exists(ckpt_dir):
-        os.makedirs(ckpt_dir)
-    ckpt_file = os.path.join(ckpt_dir, '{}.ckpt'.format(name))
-    path = model_saver.save(sess, ckpt_file)
+    ext_ckpt_dir = os.path.join(params['CHK_PATH'], folder)
+    if not os.path.exists(ext_ckpt_dir):
+        os.makedirs(ext_ckpt_dir)
+    loc_ckpt_dir = os.path.join(os.getcwd(), folder)
+    if not os.path.exists(loc_ckpt_dir):
+        os.makedirs(loc_ckpt_dir)
+    loc_ckpt_file = os.path.join(loc_ckpt_dir, '{}_{}.ckpt'.format(name, label))
+    path = model_saver.save(sess, loc_ckpt_file)
     print('Model saved at {}'.format(path))
+    shutil.copy(loc_ckpt_file, ext_ckpt_dir)
+    print('Model copied to {}'.format(ext_ckpt_dir))
     return
 
 
@@ -236,8 +301,6 @@ def main():
     best_score = 1000
     generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM,
                           HIDDEN_DIM, MAX_LENGTH, START_TOKEN)
-    target_lstm = TARGET_LSTM(vocab_size, BATCH_SIZE,
-                              EMB_DIM, HIDDEN_DIM, MAX_LENGTH, 0)
 
     with tf.variable_scope('discriminator'):
         cnn = TextCNN(
@@ -307,12 +370,9 @@ def main():
             print('\t* LOAD_PRETRAIN was set to false.')
 
         sess.run(tf.global_variables_initializer())
-        pretrain(sess, generator, target_lstm, train_discriminator)
+        pretrain(sess, generator, train_discriminator)
         path = saver.save(sess, ckpt_file)
         print('Pretrain finished and saved at {}'.format(path))
-
-    # create reward function
-    batch_reward = make_reward(train_samples)
 
     rollout = ROLLOUT(generator, 0.8)
 
@@ -321,6 +381,7 @@ def main():
     results_rows = []
     for nbatch in tqdm(range(TOTAL_BATCH)):
         results = OrderedDict({'exp_name': PREFIX})
+        batch_reward = make_reward(train_samples, nbatch)
         if nbatch % 1 == 0 or nbatch == TOTAL_BATCH - 1:
             print('* Making samples')
             if nbatch % 10 == 0:
@@ -330,15 +391,8 @@ def main():
                 gen_samples = generate_samples(
                     sess, generator, BATCH_SIZE, SAMPLE_NUM)
             likelihood_data_loader.create_batches(gen_samples)
-            test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
             print('batch_num: {}'.format(nbatch))
-            print('test_loss: {}'.format(test_loss))
             results['Batch'] = nbatch
-            results['test_loss'] = test_loss
-
-            if test_loss < best_score:
-                best_score = test_loss
-                print('best score: %f' % test_loss)
 
             # results
             mm.compute_results(gen_samples, train_samples, ord_dict, results)
@@ -368,7 +422,7 @@ def main():
         print('results')
         results_rows.append(results)
         if nbatch % params["EPOCH_SAVES"] == 0:
-            save_results(sess, PREFIX, PREFIX + '_model', results_rows)
+            save_results(sess, PREFIX, PREFIX + '_model', results_rows, nbatch)
 
     # write results
     save_results(sess, PREFIX, PREFIX + '_model', results_rows)
