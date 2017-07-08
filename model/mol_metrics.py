@@ -602,7 +602,7 @@ def get3DCoords(smile):
     molec = Chem.MolFromSmiles(smile)
     mwh = Chem.AddHs(molec)
     mwh.UpdatePropertyCache(strict=False)
-    Chem.EmbedMolecule(mwh)
+    Chem.EmbedMolecule(mwh, Chem.ETKDG())
     Chem.UFFOptimizeMolecule(mwh)
     ids = []
     xyz = []
