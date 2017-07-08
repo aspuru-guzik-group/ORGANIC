@@ -236,25 +236,20 @@ def save_results(sess, folder, name, results_rows=None, nbatch=None):
     if results_rows is not None:
         df = pd.DataFrame(results_rows)
         df.to_csv('{}_results.csv'.format(folder), index=False)
-    if nbatch is not None:
+    if nbatch is None:
         label = 'final'
     else:
         label = str(nbatch)
 
     # save models
     model_saver = tf.train.Saver()
-    ext_ckpt_dir = os.path.join(params['CHK_PATH'], folder)
-    if not os.path.exists(ext_ckpt_dir):
-        os.makedirs(ext_ckpt_dir)
-    loc_ckpt_dir = os.path.join(os.getcwd(), folder)
-    if not os.path.exists(loc_ckpt_dir):
-        os.makedirs(loc_ckpt_dir)
-    loc_ckpt_file = os.path.join(
-        loc_ckpt_dir, '{}_{}.ckpt'.format(name, label))
-    path = model_saver.save(sess, loc_ckpt_file)
+    ckpt_dir = os.path.join(params['CHK_PATH'], folder)
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
+    ckpt_file = os.path.join(
+        ckpt_dir, '{}_{}.ckpt'.format(name, label))
+    path = model_saver.save(sess, ckpt_file)
     print('Model saved at {}'.format(path))
-    shutil.copy(loc_ckpt_file, ext_ckpt_dir)
-    print('Model copied to {}'.format(ext_ckpt_dir))
     return
 
 

@@ -509,7 +509,7 @@ with a random sample of the other generated smiles.
 """
 
 def batch_variety(smiles, train_smiles=None):
-    mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(filter_smiles(smiles), len(smiles)/10)]
+    mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(filter_smiles(smiles), int(len(smiles)/10))]
     setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
     vals = [variety(smile, setfps) if verify_sequence(smile) else 0.0 for smile in smiles]
     return vals
@@ -601,6 +601,7 @@ def symmetry(smile):
 def get3DCoords(smile):
     molec = Chem.MolFromSmiles(smile)
     mwh = Chem.AddHs(molec)
+    mwh.UpdatePropertyCache(strict=False)
     Chem.EmbedMolecule(mwh)
     Chem.UFFOptimizeMolecule(mwh)
     ids = []
@@ -676,7 +677,7 @@ Journal of cheminformatics, 1(1), 8.
 """
 
 def batch_SA(smiles, train_smiles=None):
-    scores = [SA_score(s) for s in smiles]
+    scores = [SA_score(s) if verify_sequence(s) else 0.0 for s in smiles]
     return scores
 
 def SA_score(smile):
