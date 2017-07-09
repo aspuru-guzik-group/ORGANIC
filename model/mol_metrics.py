@@ -594,22 +594,24 @@ def batch_symmetry(smiles, train_smiles=None):
     return vals
 
 def symmetry(smile):
-    ids, xyz = get3DCoords(smile)
-    sch_symbol = getSymmetry(ids, xyz)
-    return 1.0 if sch_symbol != 'C1' else 0.0
+    try:
+        ids, xyz = get3DCoords(smile)
+        sch_symbol = getSymmetry(ids, xyz)
+        return 1.0 if sch_symbol != 'C1' else 0.0
+    except:
+        return 0.0
 
 def get3DCoords(smile):
-    molec = Chem.MolFromSmiles(smile)
-    mwh = Chem.AddHs(molec)
-    mwh.UpdatePropertyCache(strict=False)
-    Chem.EmbedMolecule(mwh, Chem.ETKDG())
-    Chem.MMFFOptimizeMolecule(mwh)
-    ids = []
-    xyz = []
-    for i in range(mwh.GetNumAtoms()):
-        pos = mwh.GetConformer().GetAtomPosition(i)
-        ids.append(mwh.GetAtomWithIdx(i).GetSymbol())
-        xyz.append([pos.x, pos.y, pos.z])
+    mol = Chem.MolFromSmiles(smile)
+    m = Chem.AddHs(mol)
+    m.UpdatePropertyCache(strict=False)
+    Chem.EmbedMolecule(m, Chem.ETKDG())
+    molblock = Chem.MolToMolBlock(m)
+    mblines = molblock.split('\n')[4:len(m.GetAtoms())]
+    parsed = [entry.split() for entry in mblines]
+    coords = [[coord[3], np.asarray([float(coord[0]), float(coord[1]), float(coord[2])])] for coord in parsed]
+    ids = [coord[0] for coord in coords]
+    xyz = [[coord[1][0], coord[1][1], coord[1][2]] for coord in coords]
     return ids, xyz
 
 def getSymmetry(ids, xyz):
