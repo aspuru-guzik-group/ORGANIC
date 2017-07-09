@@ -1,10 +1,5 @@
 from __future__ import absolute_import, division, print_function
-# get free gpu
-from gpu_utils import pick_gpu_lowest_memory
-gpu_free_number = str(pick_gpu_lowest_memory())
-# set enviroment variables
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
+from gpu_utils import pick_gpus_lowest_memory
 from builtins import range
 from collections import OrderedDict
 import os
@@ -23,6 +18,15 @@ import importlib
 import sys
 import shutil
 from tqdm import tqdm
+
+# GPU support
+try:
+    gpu_free_number = str(pick_gpus_lowest_memory())
+    os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
+    print('GPU {} detected and selected'.format(gpu_free_number))
+except:
+    print('No GPU detected')
+    pass
 
 if len(sys.argv) == 2:
     PARAM_FILE = sys.argv[1]
