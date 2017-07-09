@@ -303,11 +303,9 @@ def verify_sequence(smile):
     mol = Chem.MolFromSmiles(smile)
     return smile != '' and mol is not None and mol.GetNumAtoms() > 1
 
-def restrict_to_valid(smile):
+def apply_to_valid(smile, fun, **kwargs):
     mol = Chem.MolFromSmiles(smile)
-    if (smile != '' and mol is not None and mol.GetNumAtoms() > 1):
-        return smile
-    return None
+    return fun(mol, **kwargs) if smile != '' and mol is not None and mol.GetNumAtoms() > 1 else 0.0
 
 def filter_smiles(smiles):
     mols = []
@@ -465,7 +463,7 @@ Simplest metric. Assigns 1.0 if the SMILES is correct, and 0.0
 if not.
 """
 
-def batch_validity(smiles, train_smiles):
+def batch_validity(smiles, train_smiles=None):
     vals = [1.0 if verify_sequence(s) else 0.0 for s in smiles]
     return vals
 
@@ -481,17 +479,14 @@ with a random sample of the training smiles.
 def batch_diversity(smiles, train_smiles):
     rand_smiles = random.sample(train_smiles, 100)
     rand_mols = [MolFromSmiles(s) for s in rand_smiles]
-    fps = [Chem.GetMorganFingerprintAsBitVect(
-        m, 4, nBits=2048) for m in rand_mols]
-    vals = [diversity(s, fps) if verify_sequence(s)
-            else 0.0 for s in smiles]
+    fps = [Chem.GetMorganFingerprintAsBitVect(m, 4, nBits=2048) for m in rand_mols]
+    vals = [apply_to_valid(s, diversity, fps=fps) for s in smiles]
     return vals
 
-def diversity(smile, fps):
+def diversity(mol, fps):
     low_rand_dst = 0.9
     mean_div_dst = 0.945
-    ref_mol = Chem.MolFromSmiles(smile)
-    ref_fps = Chem.GetMorganFingerprintAsBitVect(ref_mol, 4, nBits=2048)
+    ref_fps = Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048)
     dist = DataStructs.BulkTanimotoSimilarity(
         ref_fps, fps, returnDistance=True)
     mean_dist = np.mean(np.array(dist))
@@ -509,15 +504,15 @@ with a random sample of the other generated smiles.
 """
 
 def batch_variety(smiles, train_smiles=None):
-    mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(filter_smiles(smiles), int(len(smiles)/10))]
+    filtered = filter_smiles(smiles)
+    mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(filtered, int(len(filtered)/10))]
     setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
-    vals = [variety(smile, setfps) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [apply_to_valid(s, variety, setfps=setfps) for s in smiles]
     return vals
 
-def variety(smile, setfps):
+def variety(mol, setfps):
     low_rand_dst = 0.9
     mean_div_dst = 0.945
-    mol = Chem.MolFromSmiles(smile)
     fp = Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048)
     dist = DataStructs.BulkTanimotoSimilarity(fp, setfps, returnDistance=True)
     mean_dist = np.mean(np.array(dist))
@@ -573,11 +568,10 @@ as a measure of how different these molecules are from the provided ones.
 def batch_creativity(smiles, train_smiles):
     mols = [Chem.MolFromSmiles(smile) for smile in filter_smiles(train_smiles)]
     setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
-    vals = [creativity(smile, setfps) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [apply_to_valid(s, creativity, setfps=setfps) for s in smiles]
     return vals
 
-def creativity(smile, setfps):
-    mol = Chem.MolFromSmiles(smile)
+def creativity(mol, setfps):
     return np.mean(DataStructs.BulkTanimotoSimilarity(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048), setfps))
 
 #
@@ -590,22 +584,22 @@ if the point group is C1.
 """
 
 def batch_symmetry(smiles, train_smiles=None):
-    vals = [symmetry(smile) if verify_sequence(smile) else 0 for smile in smiles]
+    vals = [apply_to_valid(s, symmetry) for s in smiles]
     return vals
 
-def symmetry(smile):
+def symmetry(mol):
     try:
-        ids, xyz = get3DCoords(smile)
+        ids, xyz = get3DCoords(mol)
         sch_symbol = getSymmetry(ids, xyz)
         return 1.0 if sch_symbol != 'C1' else 0.0
     except:
         return 0.0
 
-def get3DCoords(smile):
-    mol = Chem.MolFromSmiles(smile)
+def get3DCoords(mol):
     m = Chem.AddHs(mol)
     m.UpdatePropertyCache(strict=False)
-    Chem.EmbedMolecule(m, Chem.ETKDG())
+    Chem.EmbedMolecule(m)
+    Chem.MMFFOptimizeMolecule(m)
     molblock = Chem.MolToMolBlock(m)
     mblines = molblock.split('\n')[4:len(m.GetAtoms())]
     parsed = [entry.split() for entry in mblines]
@@ -632,14 +626,13 @@ Journal of chemical information and computer sciences, 39(5), 868-873.
 """
 
 def batch_solubility(smiles, train_smiles=None):
-    vals = [logP(s, train_smiles) if verify_sequence(s) else 0 for s in smiles]
+    vals = [apply_to_valid(s, logP) for s in smiles]
     return vals
 
-
-def logP(smile, train_smiles=None):
+def logP(mol, train_smiles=None):
     low_logp = -2.12178879609
     high_logp = 6.0429063424
-    logp = Crippen.MolLogP(Chem.MolFromSmiles(smile))
+    logp = Crippen.MolLogP(mol)
     val = remap(logp, low_logp, high_logp)
     val = np.clip(val, 0.0, 1.0)
     return val
@@ -679,12 +672,10 @@ Journal of cheminformatics, 1(1), 8.
 """
 
 def batch_SA(smiles, train_smiles=None):
-    scores = [SA_score(s) if verify_sequence(s) else 0.0 for s in smiles]
-    return scores
+    vals = [apply_to_valid(s, SA_score) for s in smiles]
+    return vals
 
-def SA_score(smile):
-    mol = Chem.MolFromSmiles(smile)
-
+def SA_score(mol):
     # fragment score
     fp = Chem.GetMorganFingerprint(mol, 2)
     fps = fp.GetNonzeroElements()
@@ -767,8 +758,9 @@ def batch_drugcandidate(smiles, train_smiles=None):
     return vals
 
 def drug_candidate(smile, train_smiles):
-    good_logp = constant_bump(logP(smile), 0.210, 0.945)
-    sa = SA_score(smile)
+    mol = Chem.MolFromSmiles(smile)
+    good_logp = constant_bump(logP(mol), 0.210, 0.945)
+    sa = SA_score(mol)
     novel = soft_novelty(smile, train_smiles)
     compact = conciseness(smile)
     val = (compact + good_logp + sa + novel) / 4.0
@@ -784,13 +776,12 @@ five and 0.0 if not.
 """
 
 def batch_lipinski(smiles, train_smiles):
-    vals = [Lipinski(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [apply_to_valid(s, Lipinski) for s in smiles]
     return vals
 
-def Lipinski(smile):
-    mol = Chem.MolFromSmiles(smile)
+def Lipinski(mol):
     druglikeness = 0.0
-    druglikeness += 0.25 if logP(smile) <= 5 else 0.0
+    druglikeness += 0.25 if logP(mol) <= 5 else 0.0
     druglikeness += 0.25 if rdkit.Chem.Descriptors.MolWt(mol) <= 500 else 0.0
     # Look for hydrogen bond aceptors
     acceptors = 0
@@ -817,13 +808,11 @@ This metric computes the likelihood that a given molecule is
 a natural product.
 """
 
-
 def batch_NPLikeliness(smiles, train_smiles=None):
-    scores = [NP_score(s) if verify_sequence(s) else 0 for s in smiles]
-    return scores
+    vals = [apply_to_valid(s, NP_score) for s in smiles]
+    return vals
 
-def NP_score(smile):
-    mol = Chem.MolFromSmiles(smile)
+def NP_score(mol):
     fp = Chem.GetMorganFingerprint(mol, 2)
     bits = fp.GetNonzeroElements()
 
@@ -883,10 +872,10 @@ def batch_substructure_match(smiles, train_smiles=None):
     if substructure_match == None:
         print('No substructure has been specified')
         raise
-    vals = [substructure_match(smile, sub_mol=obj_substructure) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [apply_to_valid(s, substructure_match, sub_mol=obj_substructure) for s in smiles]
+    return vals
 
-def substructure_match(smile, train_smiles=None, sub_mol=None):
-    mol = Chem.MolFromSmiles(smile)
+def substructure_match(mol, train_smiles=None, sub_mol=None):
     val = mol.HasSubstructMatch(sub_mol)
     return int(val)
 
@@ -899,7 +888,7 @@ Bickerton, G. R., Paolini, G. V., Besnard, J., Muresan, S., & Hopkins, A. L. (20
 """
 
 def batch_beauty(smiles, train_smiles=None):
-    vals = [beauty(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [apply_to_valid(s, chemical_beauty) for s in smiles]
     return vals
 
 def ads(x, a, b, c, d, e, f, dmax):
