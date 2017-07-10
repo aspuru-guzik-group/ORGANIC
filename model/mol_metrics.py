@@ -36,7 +36,11 @@ rdBase.DisableLog('rdApp.error')
 #
 #
 #
-
+def read_smi(filename):
+    with open(filename) as file:
+        smiles = file.readlines()
+    smiles = [i.strip() for i in smiles]
+    return smiles
 
 #
 # 1.1. Models data
@@ -57,6 +61,17 @@ def readNPModel(filename=None):
     return NP_model
 
 
+def readSubstructuresFile(filename, label='positive'):
+    print("mol_metrics: reading {} substructures...".format(label))
+    if os.path.exists(filename):
+        smiles = read_smi(filename)
+        patterns = [Chem.MolFromSmarts(s) for s in smiles]
+    else:
+        print('\tno substurctures file found, if using substructure scoring save smiles/smarts in {}smi'.format(label))
+        patterns = None
+    return patterns
+
+
 def readSAModel(filename=None):
     print("mol_metrics: reading SA model ...")
     if filename is None:
@@ -74,7 +89,9 @@ def readSAModel(filename=None):
 
 SA_model = readSAModel()
 NP_model = readNPModel()
-
+ALL_POS_PATTS = readSubstructuresFile('all_positive.smi', 'all_positive')
+ANY_POS_PATTS = readSubstructuresFile('any_positive.smi', 'any_positive')
+ALL_NEG_PATTS = readSubstructuresFile('all_negative.smi', 'all_negative')
 
 #__all__ = ['weights_max', 'weights_mean', 'weights_none', 'default']
 AliphaticRings = Chem.MolFromSmarts('[$([A;R][!a])]')
@@ -986,17 +1003,45 @@ variable obj_substructure) is present in a given molecule, and 0.0 if not.
 """
 
 
-def batch_substructure_match(smiles, train_smiles=None):
-    if substructure_match == None:
-        print('No substructure has been specified')
+def batch_substructure_match_all(smiles, train_smiles=None):
+    if ALL_POS_PATTS == None:
+        print('No substructures has been specified')
         raise
-    vals = [apply_to_valid(s, substructure_match,
-                           sub_mol=obj_substructure) for s in smiles]
+
+    vals = [apply_to_valid(s, substructure_match_all) for s in smiles]
     return vals
 
 
-def substructure_match(mol, train_smiles=None, sub_mol=None):
-    val = mol.HasSubstructMatch(sub_mol)
+def substructure_match_all(mol, train_smiles=None):
+    val = all([mol.HasSubstructMatch(patt) for patt in ALL_POS_PATTS])
+    return int(val)
+
+
+def batch_substructure_match_any(smiles, train_smiles=None):
+    if ANY_POS_PATTS == None:
+        print('No substructures has been specified')
+        raise
+
+    vals = [apply_to_valid(s, substructure_match_any) for s in smiles]
+    return vals
+
+
+def substructure_match_any(mol, train_smiles=None):
+    val = any([mol.HasSubstructMatch(patt) for patt in ANY_POS_PATTS])
+    return int(val)
+
+
+def batch_substructure_absence(smiles, train_smiles=None):
+    if ALL_NEG_PATTS == None:
+        print('No substructures has been specified')
+        raise
+
+    vals = [apply_to_valid(s, substructure_match_any) for s in smiles]
+    return vals
+
+
+def substructure_absence(mol, train_smiles=None):
+    val = all([not mol.HasSubstructMatch(patt) for patt in ANY_NEG_PATTS])
     return int(val)
 
 #
