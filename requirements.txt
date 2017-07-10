@@ -1,0 +1,9 @@
+tensorflow==1.2
+future==0.16.0
+numpy
+scipy
+pandas
+matplotlib
+seaborn
+rdkit
+tqdm
