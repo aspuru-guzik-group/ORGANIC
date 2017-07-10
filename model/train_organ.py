@@ -1,10 +1,5 @@
 from __future__ import absolute_import, division, print_function
-# get free gpu
-from gpu_utils import pick_gpu_lowest_memory
-gpu_free_number = str(pick_gpu_lowest_memory())
-# set enviroment variables
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
+from gpu_utils import pick_gpus_lowest_memory
 from builtins import range
 from collections import OrderedDict
 import os
@@ -23,6 +18,15 @@ import importlib
 import sys
 import shutil
 from tqdm import tqdm
+
+# GPU support
+try:
+    gpu_free_number = str(pick_gpus_lowest_memory()[0])
+    os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
+    print('GPUs {} detected and selected'.format(gpu_free_number))
+except:
+    print('No GPU detected')
+    pass
 
 if len(sys.argv) == 2:
     PARAM_FILE = sys.argv[1]
@@ -93,49 +97,6 @@ dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
 dis_dropout_keep_prob = 0.75
 dis_l2_reg_lambda = 0.2
 ##########################################################################
-
-
-#============= GPU Configuration ==============
-
-def run_command(cmd):
-    output = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
-    return output.decode("ascii")
-
-
-def list_available_gpus():
-    output = run_command("nvidia-smi -L")
-    gpu_regex = re.compile(r"GPU (?P<gpu_id>\d+):")
-    result = []
-    for line in output.strip().split("\n"):
-        m = gpu_regex.match(line)
-        assert m, "Couldnt parse " + line
-        result.append(int(m.group("gpu_id")))
-    return result
-
-
-def gpu_memory_map():
-    output = run_command("nvidia-smi")
-    gpu_output = output[output.find("GPU Memory"):]
-    memory_regex = re.compile(
-        r"[|]\s+?(?P<gpu_id>\d+)\D+?(?P<pid>\d+).+[ ](?P<gpu_memory>\d+)MiB")
-    rows = gpu_output.split("\n")
-    result = {gpu_id: 0 for gpu_id in list_available_gpus()}
-    for row in gpu_output.split("\n"):
-        m = memory_regex.search(row)
-        if not m:
-            continue
-        gpu_id = int(m.group("gpu_id"))
-        gpu_memory = int(m.group("gpu_memory"))
-        result[gpu_id] += gpu_memory
-    return result
-
-
-def pick_gpu_lowest_memory():
-    memory_gpu_map = [(memory, gpu_id)
-                      for (gpu_id, memory) in gpu_memory_map().items()]
-    best_memory, best_gpu = sorted(memory_gpu_map)[0]
-    return best_gpu
 
 #============= Objective ==============
 
@@ -279,25 +240,20 @@ def save_results(sess, folder, name, results_rows=None, nbatch=None):
     if results_rows is not None:
         df = pd.DataFrame(results_rows)
         df.to_csv('{}_results.csv'.format(folder), index=False)
-    if nbatch is not None:
+    if nbatch is None:
         label = 'final'
     else:
         label = str(nbatch)
 
     # save models
     model_saver = tf.train.Saver()
-    ext_ckpt_dir = os.path.join(params['CHK_PATH'], folder)
-    if not os.path.exists(ext_ckpt_dir):
-        os.makedirs(ext_ckpt_dir)
-    loc_ckpt_dir = os.path.join(os.getcwd(), folder)
-    if not os.path.exists(loc_ckpt_dir):
-        os.makedirs(loc_ckpt_dir)
-    loc_ckpt_file = os.path.join(
-        loc_ckpt_dir, '{}_{}.ckpt'.format(name, label))
-    path = model_saver.save(sess, loc_ckpt_file)
+    ckpt_dir = os.path.join(params['CHK_PATH'], folder)
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
+    ckpt_file = os.path.join(
+        ckpt_dir, '{}_{}.ckpt'.format(name, label))
+    path = model_saver.save(sess, ckpt_file)
     print('Model saved at {}'.format(path))
-    shutil.copy(loc_ckpt_file, ext_ckpt_dir)
-    print('Model copied to {}'.format(ext_ckpt_dir))
     return
 
 
