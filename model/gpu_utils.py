@@ -51,7 +51,7 @@ def pick_gpus_lowest_memory(ngpus=1):
 
     memory_gpu_map = [(memory, gpu_id)
                       for (gpu_id, memory) in gpu_memory_map().items()]
-    best_memory, best_gpu = sorted(memory_gpu_map)[:ngpus]
-    return best_gpu
+    best_gpus = sorted(memory_gpu_map)[:ngpus]
+    return best_gpus
 
     
