@@ -295,18 +295,62 @@ def read_smi(filename):
 #
 
 
+def gauss_remap(x, x_mean, x_std):
+    return np.exp(-(x - x_mean)**2 / (x_std**2))
+
+
 def remap(x, x_min, x_max):
     return (x - x_min) / (x_max - x_min)
 
 
-def constant_bump(x, x_low, x_high, decay=0.025):
+def constant_range(x, x_low, x_high):
+    if hasattr(x, "__len__"):
+        return np.array([constant_range_func(xi, x_low, x_high) for xi in x])
+    else:
+        return constant_range_func(x, x_low, x_high)
+
+
+def constant_range_func(x, x_low, x_high):
+    if x <= x_low or x >= x_high:
+        return 0
+    else:
+        return 1
+
+
+def constant_bump_func(x, x_low, x_high, decay=0.025):
     if x <= x_low:
         return np.exp(-(x - x_low)**2 / decay)
     elif x >= x_high:
         return np.exp(-(x - x_high)**2 / decay)
     else:
         return 1
-    return
+
+
+def constant_bump(x, x_low, x_high, decay=0.025):
+    if hasattr(x, "__len__"):
+        return np.array([constant_bump_func(xi, x_low, x_high, decay) for xi in x])
+    else:
+        return constant_bump_func(x, x_low, x_high, decay)
+
+
+def smooth_plateau(x, x_point, decay=0.025, increase=True):
+    if hasattr(x, "__len__"):
+        return np.array([smooth_plateau_func(xi, x_point, decay, increase) for xi in x])
+    else:
+        return smooth_plateau_func(x, x_point, decay, increase)
+
+
+def smooth_plateau_func(x, x_point, decay=0.025, increase=True):
+    if increase:
+        if x <= x_point:
+            return np.exp(-(x - x_point)**2 / decay)
+        else:
+            return 1
+    else:
+        if x >= x_point:
+            return np.exp(-(x - x_point)**2 / decay)
+        else:
+            return 1
 
 
 def pct(a, b):
