@@ -1,9 +1,7 @@
 from __future__ import absolute_import, division, print_function
 from builtins import range
 import os
-import sys
 import numpy as np
-import tensorflow as tf
 import csv
 import time
 import pickle
@@ -16,13 +14,11 @@ from rdkit import rdBase
 from rdkit import DataStructs
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import Crippen, MolFromSmiles, MolToSmiles, Descriptors
-from rdkit.Chem.Fingerprints import FingerprintMols
 from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 from copy import deepcopy
 from math import exp, log
-import rdkit.Chem.inchi as inchi
 from cnn_metrics import cnn_pce, cnn_homolumo
-
+from collections import OrderedDict
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
 
@@ -41,20 +37,30 @@ rdBase.DisableLog('rdApp.error')
 #
 #
 
+
 #
 # 1.1. Models data
 #
 
-def readNPModel(filename='NP_score.pkl.gz'):
+MOD_PATH = os.path.dirname(os.path.realpath(__file__))
+print(MOD_PATH)
+
+
+def readNPModel(filename=None):
     print("mol_metrics: reading NP model ...")
+    if filename is None:
+        filename = os.path.join(MOD_PATH, 'NP_score.pkl.gz')
     start = time.time()
     NP_model = pickle.load(gzip.open(filename))
     end = time.time()
     print("loaded in {}".format(end - start))
     return NP_model
 
-def readSAModel(filename='SA_score.pkl.gz'):
+
+def readSAModel(filename=None):
     print("mol_metrics: reading SA model ...")
+    if filename is None:
+        filename = os.path.join(MOD_PATH, 'SA_score.pkl.gz')
     start = time.time()
     model_data = pickle.load(gzip.open(filename))
     outDict = {}
@@ -70,7 +76,7 @@ SA_model = readSAModel()
 NP_model = readNPModel()
 
 
-__all__ = ['weights_max', 'weights_mean', 'weights_none', 'default']
+#__all__ = ['weights_max', 'weights_mean', 'weights_none', 'default']
 AliphaticRings = Chem.MolFromSmarts('[$([A;R][!a])]')
 AcceptorSmarts = [
     '[oH0;X2]',
@@ -84,7 +90,7 @@ AcceptorSmarts = [
     '[nH0;X2]',
     '[NH0;X1;v3]',
     '[$([N;+0;X3;v3]);!$(N[C,S]=O)]'
-    ]
+]
 Acceptors = []
 for hba in AcceptorSmarts:
     Acceptors.append(Chem.MolFromSmarts(hba))
@@ -205,7 +211,7 @@ StructuralAlertSmarts = [
     '[13C]',
     '[18O]',
     '[34S]'
-    ]
+]
 StructuralAlerts = []
 for smarts in StructuralAlertSmarts:
     StructuralAlerts.append(Chem.MolFromSmarts(smarts))
@@ -214,27 +220,40 @@ for smarts in StructuralAlertSmarts:
 #   rows[8]:    MW, ALOGP, HBA, HBD, PSA, ROTB, AROM, ALERTS
 #   columns[7]: A, B, C, D, E, F, DMAX
 # ALOGP parameters from Gregory Gerebtzoff (2012, Roche)
-pads1 = [   [2.817065973, 392.5754953, 290.7489764, 2.419764353, 49.22325677, 65.37051707, 104.9805561],
-            [0.486849448, 186.2293718, 2.066177165, 3.902720615, 1.027025453, 0.913012565, 145.4314800],
-            [2.948620388, 160.4605972, 3.615294657, 4.435986202, 0.290141953, 1.300669958, 148.7763046],    
-            [1.618662227, 1010.051101, 0.985094388, 0.000000001, 0.713820843, 0.920922555, 258.1632616],
-            [1.876861559, 125.2232657, 62.90773554, 87.83366614, 12.01999824, 28.51324732, 104.5686167],
-            [0.010000000, 272.4121427, 2.558379970, 1.565547684, 1.271567166, 2.758063707, 105.4420403],
-            [3.217788970, 957.7374108, 2.274627939, 0.000000001, 1.317690384, 0.375760881, 312.3372610],
-            [0.010000000, 1199.094025, -0.09002883, 0.000000001, 0.185904477, 0.875193782, 417.7253140]     ]
+pads1 = [[2.817065973, 392.5754953, 290.7489764, 2.419764353, 49.22325677, 65.37051707, 104.9805561],
+         [0.486849448, 186.2293718, 2.066177165, 3.902720615,
+          1.027025453, 0.913012565, 145.4314800],
+         [2.948620388, 160.4605972, 3.615294657, 4.435986202,
+             0.290141953, 1.300669958, 148.7763046],
+         [1.618662227, 1010.051101, 0.985094388, 0.000000001,
+          0.713820843, 0.920922555, 258.1632616],
+         [1.876861559, 125.2232657, 62.90773554, 87.83366614,
+          12.01999824, 28.51324732, 104.5686167],
+         [0.010000000, 272.4121427, 2.558379970, 1.565547684,
+          1.271567166, 2.758063707, 105.4420403],
+         [3.217788970, 957.7374108, 2.274627939, 0.000000001,
+          1.317690384, 0.375760881, 312.3372610],
+         [0.010000000, 1199.094025, -0.09002883, 0.000000001, 0.185904477, 0.875193782, 417.7253140]]
 # ALOGP parameters from the original publication
-pads2 = [   [2.817065973, 392.5754953, 290.7489764, 2.419764353, 49.22325677, 65.37051707, 104.9805561],
-            [3.172690585, 137.8624751, 2.534937431, 4.581497897, 0.822739154, 0.576295591, 131.3186604],
-            [2.948620388, 160.4605972, 3.615294657, 4.435986202, 0.290141953, 1.300669958, 148.7763046],    
-            [1.618662227, 1010.051101, 0.985094388, 0.000000001, 0.713820843, 0.920922555, 258.1632616],
-            [1.876861559, 125.2232657, 62.90773554, 87.83366614, 12.01999824, 28.51324732, 104.5686167],
-            [0.010000000, 272.4121427, 2.558379970, 1.565547684, 1.271567166, 2.758063707, 105.4420403],
-            [3.217788970, 957.7374108, 2.274627939, 0.000000001, 1.317690384, 0.375760881, 312.3372610],
-            [0.010000000, 1199.094025, -0.09002883, 0.000000001, 0.185904477, 0.875193782, 417.7253140]     ]
+pads2 = [[2.817065973, 392.5754953, 290.7489764, 2.419764353, 49.22325677, 65.37051707, 104.9805561],
+         [3.172690585, 137.8624751, 2.534937431, 4.581497897,
+          0.822739154, 0.576295591, 131.3186604],
+         [2.948620388, 160.4605972, 3.615294657, 4.435986202,
+             0.290141953, 1.300669958, 148.7763046],
+         [1.618662227, 1010.051101, 0.985094388, 0.000000001,
+          0.713820843, 0.920922555, 258.1632616],
+         [1.876861559, 125.2232657, 62.90773554, 87.83366614,
+          12.01999824, 28.51324732, 104.5686167],
+         [0.010000000, 272.4121427, 2.558379970, 1.565547684,
+          1.271567166, 2.758063707, 105.4420403],
+         [3.217788970, 957.7374108, 2.274627939, 0.000000001,
+          1.317690384, 0.375760881, 312.3372610],
+         [0.010000000, 1199.094025, -0.09002883, 0.000000001, 0.185904477, 0.875193782, 417.7253140]]
 
 #
 # 1.2. Loading utilities
 #
+
 
 def load_train_data(filename):
     ext = filename.split(".")[-1]
@@ -246,6 +265,7 @@ def load_train_data(filename):
         raise ValueError('data is not smi or csv!')
     return
 
+
 def read_smiles_csv(filename):
     # Assumes smiles is in column 0
     with open(filename) as file:
@@ -254,6 +274,7 @@ def read_smiles_csv(filename):
         data = [row[smiles_idx] for row in reader]
     return data
 
+
 def save_smi(name, smiles):
     if not os.path.exists('epoch_data'):
         os.makedirs('epoch_data')
@@ -261,6 +282,7 @@ def save_smi(name, smiles):
     with open(smi_file, 'w') as afile:
         afile.write('\n'.join(smiles))
     return
+
 
 def read_smi(filename):
     with open(filename) as file:
@@ -272,8 +294,10 @@ def read_smi(filename):
 # 1.3. Math utilities
 #
 
+
 def remap(x, x_min, x_max):
     return (x - x_min) / (x_max - x_min)
+
 
 def constant_bump(x, x_low, x_high, decay=0.025):
     if x <= x_low:
@@ -284,6 +308,7 @@ def constant_bump(x, x_low, x_high, decay=0.025):
         return 1
     return
 
+
 def pct(a, b):
     if len(b) == 0:
         return 0
@@ -293,26 +318,28 @@ def pct(a, b):
 # 1.4. Encoding/decoding utilities
 #
 
+
 def canon_smile(smile):
     return MolToSmiles(MolFromSmiles(smile))
 
+
 def verified_and_below(smile, max_len):
     return len(smile) < max_len and verify_sequence(smile)
+
 
 def verify_sequence(smile):
     mol = Chem.MolFromSmiles(smile)
     return smile != '' and mol is not None and mol.GetNumAtoms() > 1
 
+
 def apply_to_valid(smile, fun, **kwargs):
     mol = Chem.MolFromSmiles(smile)
     return fun(mol, **kwargs) if smile != '' and mol is not None and mol.GetNumAtoms() > 1 else 0.0
 
+
 def filter_smiles(smiles):
-    mols = []
-    for smile in smiles:
-        if verify_sequence(smile) == True:
-            mols.append(smile)
-    return mols
+    return [smile for smile in smiles if verify_sequence(smile)]
+
 
 def build_vocab(smiles, pad_char='_', start_char='^'):
     i = 1
@@ -326,15 +353,19 @@ def build_vocab(smiles, pad_char='_', start_char='^'):
     char_dict[pad_char], ord_dict[i] = i, pad_char
     return char_dict, ord_dict
 
+
 def pad(smile, n, pad_char='_'):
     if n < len(smile):
         return smile
     return smile + pad_char * (n - len(smile))
 
+
 def unpad(smile, pad_char='_'): return smile.rstrip(pad_char)
+
 
 def encode(smile, max_len, char_dict): return [
     char_dict[c] for c in pad(smile, max_len)]
+
 
 def decode(ords, ord_dict): return unpad(
     ''.join([ord_dict[o] for o in ords]))
@@ -342,6 +373,7 @@ def decode(ords, ord_dict): return unpad(
 #
 # 1.5. Results utilities
 #
+
 
 def print_params(p):
     print('Using parameters:')
@@ -358,6 +390,7 @@ def print_params(p):
             print('{:20s} - {:12}'.format(key, value))
     print('rest of parameters are set as default\n')
     return
+
 
 def compute_results(model_samples, train_data, ord_dict, results={}, verbose=True):
     samples = [decode(s, ord_dict) for s in model_samples]
@@ -394,6 +427,8 @@ def compute_results(model_samples, train_data, ord_dict, results={}, verbose=Tru
     return
 
 # def print_results(verified_samples, unverified_samples, metrics, results={}):
+
+
 def print_results(verified_samples, unverified_samples, results={}):
     print('~~~ Summary Results ~~~')
     print('{:15s} : {:6d}'.format("Total samples", results['n_samples']))
@@ -463,6 +498,7 @@ Simplest metric. Assigns 1.0 if the SMILES is correct, and 0.0
 if not.
 """
 
+
 def batch_validity(smiles, train_smiles=None):
     vals = [1.0 if verify_sequence(s) else 0.0 for s in smiles]
     return vals
@@ -476,12 +512,15 @@ This metric compares the Tanimoto distance of a given molecule
 with a random sample of the training smiles.
 """
 
+
 def batch_diversity(smiles, train_smiles):
     rand_smiles = random.sample(train_smiles, 100)
     rand_mols = [MolFromSmiles(s) for s in rand_smiles]
-    fps = [Chem.GetMorganFingerprintAsBitVect(m, 4, nBits=2048) for m in rand_mols]
+    fps = [Chem.GetMorganFingerprintAsBitVect(
+        m, 4, nBits=2048) for m in rand_mols]
     vals = [apply_to_valid(s, diversity, fps=fps) for s in smiles]
     return vals
+
 
 def diversity(mol, fps):
     low_rand_dst = 0.9
@@ -503,12 +542,16 @@ This metric compares the Tanimoto distance of a given molecule
 with a random sample of the other generated smiles.
 """
 
+
 def batch_variety(smiles, train_smiles=None):
     filtered = filter_smiles(smiles)
-    mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(filtered, int(len(filtered)/10))]
-    setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
+    mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(
+        filtered, int(len(filtered) / 10))]
+    setfps = [Chem.GetMorganFingerprintAsBitVect(
+        mol, 4, nBits=2048) for mol in mols]
     vals = [apply_to_valid(s, variety, setfps=setfps) for s in smiles]
     return vals
+
 
 def variety(mol, setfps):
     low_rand_dst = 0.9
@@ -529,27 +572,33 @@ These metrics check whether a given smile is in the provided
 training set or not.
 """
 
+
 def batch_novelty(smiles, train_smiles):
     vals = [novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
     return vals
 
+
 def novelty(smile, train_smiles):
     newness = 1.0 if smile not in train_smiles else 0.0
     return newness
+
 
 def batch_hardnovelty(smiles, train_smiles):
     vals = [hard_novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
     return vals
 
+
 def hard_novelty(smile, train_smiles):
     newness = 1.0 if canon_smile(smile) not in train_smiles else 0.0
     return newness
 
+
 def soft_novelty(smile, train_smiles):
     newness = 1.0 if smile not in train_smiles else 0.3
     return newness
+
 
 def batch_softnovelty(smiles, train_smiles):
     vals = [soft_novelty(smile, train_smiles) if verify_sequence(
@@ -565,11 +614,14 @@ This metric computes the Tanimoto distance of a smile to the training set,
 as a measure of how different these molecules are from the provided ones.
 """
 
+
 def batch_creativity(smiles, train_smiles):
     mols = [Chem.MolFromSmiles(smile) for smile in filter_smiles(train_smiles)]
-    setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
+    setfps = [Chem.GetMorganFingerprintAsBitVect(
+        mol, 4, nBits=2048) for mol in mols]
     vals = [apply_to_valid(s, creativity, setfps=setfps) for s in smiles]
     return vals
+
 
 def creativity(mol, setfps):
     return np.mean(DataStructs.BulkTanimotoSimilarity(Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048), setfps))
@@ -583,9 +635,11 @@ This metric yields 1.0 if the generated molecule has any element of symmetry, an
 if the point group is C1.
 """
 
+
 def batch_symmetry(smiles, train_smiles=None):
     vals = [apply_to_valid(s, symmetry) for s in smiles]
     return vals
+
 
 def symmetry(mol):
     try:
@@ -595,6 +649,7 @@ def symmetry(mol):
     except:
         return 0.0
 
+
 def get3DCoords(mol):
     m = Chem.AddHs(mol)
     m.UpdatePropertyCache(strict=False)
@@ -603,10 +658,12 @@ def get3DCoords(mol):
     molblock = Chem.MolToMolBlock(m)
     mblines = molblock.split('\n')[4:len(m.GetAtoms())]
     parsed = [entry.split() for entry in mblines]
-    coords = [[coord[3], np.asarray([float(coord[0]), float(coord[1]), float(coord[2])])] for coord in parsed]
+    coords = [[coord[3], np.asarray([float(coord[0]), float(
+        coord[1]), float(coord[2])])] for coord in parsed]
     ids = [coord[0] for coord in coords]
     xyz = [[coord[1][0], coord[1][1], coord[1][2]] for coord in coords]
     return ids, xyz
+
 
 def getSymmetry(ids, xyz):
     mol = PointGroupAnalyzer(mg.Molecule(ids, xyz))
@@ -625,9 +682,11 @@ Wildman, S. A., & Crippen, G. M. (1999). Prediction of physicochemical parameter
 Journal of chemical information and computer sciences, 39(5), 868-873.
 """
 
+
 def batch_solubility(smiles, train_smiles=None):
     vals = [apply_to_valid(s, logP) for s in smiles]
     return vals
+
 
 def logP(mol, train_smiles=None):
     low_logp = -2.12178879609
@@ -646,13 +705,15 @@ This metric penalizes smiles strings that are too long, assuming that the
 canonic smile is the shortest representation.
 """
 
+
 def batch_conciseness(smiles, train_smiles=None):
     vals = [conciseness(s) if verify_sequence(s) else 0 for s in smiles]
     return vals
 
+
 def conciseness(smile, train_smiles=None):
     canon = canon_smile(smile)
-    diff_len = len(smile) -len(canon)
+    diff_len = len(smile) - len(canon)
     val = np.clip(diff_len, 0.0, 20)
     val = 1 - 1.0 / 20.0 * val
     return val
@@ -671,9 +732,11 @@ score of drug-like molecules based on molecular complexity and fragment contribu
 Journal of cheminformatics, 1(1), 8.
 """
 
+
 def batch_SA(smiles, train_smiles=None):
     vals = [apply_to_valid(s, SA_score) for s in smiles]
     return vals
+
 
 def SA_score(mol):
     # fragment score
@@ -752,10 +815,12 @@ an equally ponderated mean of the following factors:
     - Soft novelty
 """
 
+
 def batch_drugcandidate(smiles, train_smiles=None):
     vals = [drug_candidate(s, train_smiles)
             if verify_sequence(s) else 0 for s in smiles]
     return vals
+
 
 def drug_candidate(smile, train_smiles):
     mol = Chem.MolFromSmiles(smile)
@@ -775,9 +840,11 @@ This metric assigns 1.0 if the molecule follows Lipinski's rule of
 five and 0.0 if not.
 """
 
+
 def batch_lipinski(smiles, train_smiles):
     vals = [apply_to_valid(s, Lipinski) for s in smiles]
     return vals
+
 
 def Lipinski(mol):
     druglikeness = 0.0
@@ -794,8 +861,8 @@ def Lipinski(mol):
     for bond in mol.GetBonds():
         a1 = mol.GetAtomWithIdx(bond.GetBeginAtomIdx()).GetAtomicNum()
         a2 = mol.GetAtomWithIdx(bond.GetEndAtomIdx()).GetAtomicNum()
-        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8,1)) else 0.0
-        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7,1)) else 0.0
+        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8, 1)) else 0.0
+        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7, 1)) else 0.0
     druglikeness += 0.25 if donors <= 5 else 0.0
     return druglikeness
 
@@ -808,9 +875,11 @@ This metric computes the likelihood that a given molecule is
 a natural product.
 """
 
+
 def batch_NPLikeliness(smiles, train_smiles=None):
     vals = [apply_to_valid(s, NP_score) for s in smiles]
     return vals
+
 
 def NP_score(mol):
     fp = Chem.GetMorganFingerprint(mol, 2)
@@ -840,9 +909,11 @@ solar cell built with a given molecule, using a CNN on a 64x64/32x32
 bit array containing Morgan fingerprints.
 """
 
+
 def batch_PCE(smiles, train_smiles=None):
     cnn = cnn_pce(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [cnn.predict(smile) if verify_sequence(smile)
+            else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
 
 #
@@ -854,9 +925,11 @@ This metric computes the HOMO-LUMO energy difference of a given
 molecule,using a CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
 """
 
+
 def batch_bandgap(smiles, train_smiles=None):
     cnn = cnn_homolumo(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [cnn.predict(smile) if verify_sequence(smile)
+            else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
 
 #
@@ -868,12 +941,15 @@ This metric assigns 1.0 if a previously defined substructure (through the global
 variable obj_substructure) is present in a given molecule, and 0.0 if not.
 """
 
+
 def batch_substructure_match(smiles, train_smiles=None):
     if substructure_match == None:
         print('No substructure has been specified')
         raise
-    vals = [apply_to_valid(s, substructure_match, sub_mol=obj_substructure) for s in smiles]
+    vals = [apply_to_valid(s, substructure_match,
+                           sub_mol=obj_substructure) for s in smiles]
     return vals
+
 
 def substructure_match(mol, train_smiles=None, sub_mol=None):
     val = mol.HasSubstructMatch(sub_mol)
@@ -887,50 +963,65 @@ def substructure_match(mol, train_smiles=None, sub_mol=None):
 Bickerton, G. R., Paolini, G. V., Besnard, J., Muresan, S., & Hopkins, A. L. (2012). Quantifying the chemical beauty of drugs. Nature chemistry, 4(2), 90-98.
 """
 
+
 def batch_beauty(smiles, train_smiles=None):
     vals = [apply_to_valid(s, chemical_beauty) for s in smiles]
     return vals
 
+
 def ads(x, a, b, c, d, e, f, dmax):
-    return ((a+(b/(1+exp(-1*(x-c+d/2)/e))*(1-1/(1+exp(-1*(x-c-d/2)/f))))) / dmax)
+    return ((a + (b / (1 + exp(-1 * (x - c + d / 2) / e)) * (1 - 1 / (1 + exp(-1 * (x - c - d / 2) / f))))) / dmax)
+
 
 def properties(mol):
     matches = []
     if (mol is None):
         raise WrongArgument("properties(mol)", "mol argument is \'None\'")
     x = [0] * 8
-    x[0] = Descriptors.MolWt(mol)                                               # MW 
-    x[1] = Descriptors.MolLogP(mol)                                             # ALOGP
+    # MW
+    x[0] = Descriptors.MolWt(mol)
+    # ALOGP
+    x[1] = Descriptors.MolLogP(mol)
     for hba in Acceptors:                                                       # HBA
         if (mol.HasSubstructMatch(hba)):
             matches = mol.GetSubstructMatches(hba)
             x[2] += len(matches)
-    x[3] = Descriptors.NumHDonors(mol)                                          # HBD
-    x[4] = Descriptors.TPSA(mol)                                                # PSA
-    x[5] = Descriptors.NumRotatableBonds(mol)                                   # ROTB
-    x[6] = Chem.GetSSSR(Chem.DeleteSubstructs(deepcopy(mol), AliphaticRings))   # AROM
+    x[3] = Descriptors.NumHDonors(
+        mol)                                          # HBD
+    # PSA
+    x[4] = Descriptors.TPSA(mol)
+    x[5] = Descriptors.NumRotatableBonds(
+        mol)                                   # ROTB
+    x[6] = Chem.GetSSSR(Chem.DeleteSubstructs(
+        deepcopy(mol), AliphaticRings))   # AROM
     for alert in StructuralAlerts:                                              # ALERTS
-        if (mol.HasSubstructMatch(alert)): x[7] += 1
+        if (mol.HasSubstructMatch(alert)):
+            x[7] += 1
     return x
+
 
 def qed(w, p, gerebtzoff):
     d = [0.00] * 8
     if (gerebtzoff):
         for i in range(0, 8):
-            d[i] = ads(p[i], pads1[i][0], pads1[i][1], pads1[i][2], pads1[i][3], pads1[i][4], pads1[i][5], pads1[i][6])
+            d[i] = ads(p[i], pads1[i][0], pads1[i][1], pads1[i][2], pads1[
+                       i][3], pads1[i][4], pads1[i][5], pads1[i][6])
     else:
         for i in range(0, 8):
-            d[i] = ads(p[i], pads2[i][0], pads2[i][1], pads2[i][2], pads2[i][3], pads2[i][4], pads2[i][5], pads2[i][6])
+            d[i] = ads(p[i], pads2[i][0], pads2[i][1], pads2[i][2], pads2[
+                       i][3], pads2[i][4], pads2[i][5], pads2[i][6])
     t = 0.0
     for i in range(0, 8):
         t += w[i] * log(d[i])
     return (exp(t / sum(w)))
 
-def weights_mean(mol, gerebtzoff = True):
+
+def weights_mean(mol, gerebtzoff=True):
     props = properties(mol)
     return qed([0.66, 0.46, 0.05, 0.61, 0.06, 0.65, 0.48, 0.95], props, gerebtzoff)
 
-def chemical_beauty(mol, gerebtzoff = True):
+
+def chemical_beauty(mol, gerebtzoff=True):
     return weights_mean(mol, gerebtzoff)
 
 #
@@ -942,9 +1033,11 @@ This metric computes the density of a given molecule, using a CNN
 on a 64x64/32x32 bit array containing Morgan fingerprints.
 """
 
+
 def batch_density(smiles, train_smiles=None):
     cnn = cnn_density(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [cnn.predict(smile) if verify_sequence(smile)
+            else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
 
 #
@@ -956,9 +1049,11 @@ This metric computes the melting point of a given  molecule, using a
 CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
 """
 
+
 def batch_mp(smiles, train_smiles=None):
     cnn = cnn_mp(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [cnn.predict(smile) if verify_sequence(smile)
+            else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
 
 #
@@ -970,22 +1065,12 @@ This metric computes the mutagenicity of a given  molecule, using a
 CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
 """
 
+
 def batch_mp(smiles, train_smiles=None):
     cnn = cnn_mp(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
+    vals = [cnn.predict(smile) if verify_sequence(smile)
+            else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
-
-#
-#  COMBINATIONS
-#
-
-def batch_logPSA(smiles, train_smiles=None):
-    vals = [0.5*logP(smile)+0.5*SA_score(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
-    return vals
-
-def batch_NPSA(smiles, train_smiles=None):
-    vals = [0.5*NP_score(smile)+0.5*SA_score(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
-    return vals
 
 ############################################
 #
@@ -996,9 +1081,9 @@ def batch_NPSA(smiles, train_smiles=None):
 #
 #
 
-def load_reward(objective):
 
-    metrics = {}
+def get_metrics():
+    metrics = OrderedDict()
     metrics['validity'] = batch_validity
     metrics['novelty'] = batch_novelty
     metrics['creativity'] = batch_creativity
@@ -1013,12 +1098,16 @@ def load_reward(objective):
     metrics['synthesizability'] = batch_SA
     metrics['lipinski'] = batch_lipinski
     metrics['drug_candidate'] = batch_drugcandidate
-    metrics['pce'] = batch_PCE
-    metrics['bandgap'] = batch_bandgap
-    metrics['substructure_match'] = batch_substructure_match
+   # metrics['pce'] = batch_PCE
+   # metrics['bandgap'] = batch_bandgap
+   # metrics['substructure_match'] = batch_substructure_match
     metrics['chemical_beauty'] = batch_beauty
-    metrics['logPSA'] = batch_logPSA
-    metrics['NPSA'] = batch_NPSA
+    return metrics
+
+
+def load_reward(objective):
+
+    metrics = get_metrics()
 
     if objective in metrics.keys():
         return metrics[objective]
