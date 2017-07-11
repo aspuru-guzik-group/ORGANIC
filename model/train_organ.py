@@ -21,7 +21,7 @@ from tensorflow.python import debug as tf_debug
 
 # GPU support
 try:
-    gpu_free_number = str(pick_gpus_lowest_memory()[0])
+    gpu_free_number = str(pick_gpus_lowest_memory()[0, 0])
     os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
     print('GPUs {} detected and selected'.format(gpu_free_number))
 except:
