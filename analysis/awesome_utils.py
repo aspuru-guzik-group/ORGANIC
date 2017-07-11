@@ -31,6 +31,7 @@ def error_stats(x, y, w=None, verbose=False):
     return mae, mae_std, rmse, r2, R2
 
 
+
 def data_scatter(data, prop, label_x, label_y, c, title, cmap=None):
     x = data[label_x]
     y = data[label_y]

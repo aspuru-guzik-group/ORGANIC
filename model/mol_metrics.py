@@ -36,6 +36,8 @@ rdBase.DisableLog('rdApp.error')
 #
 #
 #
+
+
 def read_smi(filename):
     with open(filename) as file:
         smiles = file.readlines()
@@ -51,7 +53,7 @@ print(MOD_PATH)
 
 
 def readNPModel(filename=None):
-    print("mol_metrics: reading NP model ...")
+    print("mol_metrics: reading NP model ...",end=' ')
     if filename is None:
         filename = os.path.join(MOD_PATH, 'NP_score.pkl.gz')
     start = time.time()
@@ -62,9 +64,9 @@ def readNPModel(filename=None):
 
 
 def readSubstructuresFile(filename, label='positive'):
-    print("mol_metrics: reading {} substructures...".format(label))
     if os.path.exists(filename):
         smiles = read_smi(filename)
+        print("mol_metrics: reading {} substructures from {} ...".format(len(smiles),label))
         patterns = [Chem.MolFromSmarts(s) for s in smiles]
     else:
         print('\tno substurctures file found, if using substructure scoring save smiles/smarts in {}smi'.format(label))
@@ -73,7 +75,7 @@ def readSubstructuresFile(filename, label='positive'):
 
 
 def readSAModel(filename=None):
-    print("mol_metrics: reading SA model ...")
+    print("mol_metrics: reading SA model ...",end=' ')
     if filename is None:
         filename = os.path.join(MOD_PATH, 'SA_score.pkl.gz')
     start = time.time()
@@ -93,6 +95,7 @@ ALL_POS_PATTS = readSubstructuresFile('all_positive.smi', 'all_positive')
 ANY_POS_PATTS = readSubstructuresFile('any_positive.smi', 'any_positive')
 ALL_NEG_PATTS = readSubstructuresFile('all_negative.smi', 'all_negative')
 
+NORMALIZE = False
 #__all__ = ['weights_max', 'weights_mean', 'weights_none', 'default']
 AliphaticRings = Chem.MolFromSmarts('[$([A;R][!a])]')
 AcceptorSmarts = [
@@ -590,8 +593,9 @@ def diversity(mol, fps):
     dist = DataStructs.BulkTanimotoSimilarity(
         ref_fps, fps, returnDistance=True)
     mean_dist = np.mean(np.array(dist))
-    val = remap(mean_dist, low_rand_dst, mean_div_dst)
-    val = np.clip(val, 0.0, 1.0)
+    if NORMALIZE:
+        val = remap(mean_dist, low_rand_dst, mean_div_dst)
+        val = np.clip(val, 0.0, 1.0)
     return val
 
 #
@@ -620,8 +624,9 @@ def variety(mol, setfps):
     fp = Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048)
     dist = DataStructs.BulkTanimotoSimilarity(fp, setfps, returnDistance=True)
     mean_dist = np.mean(np.array(dist))
-    val = remap(mean_dist, low_rand_dst, mean_div_dst)
-    val = np.clip(val, 0.0, 1.0)
+    if NORMALIZE:
+        val = remap(mean_dist, low_rand_dst, mean_div_dst)
+        val = np.clip(val, 0.0, 1.0)
     return val
 
 #
@@ -750,11 +755,12 @@ def batch_solubility(smiles, train_smiles=None):
 
 
 def logP(mol, train_smiles=None):
-    low_logp = -2.12178879609
-    high_logp = 6.0429063424
-    logp = Crippen.MolLogP(mol)
-    val = remap(logp, low_logp, high_logp)
-    val = np.clip(val, 0.0, 1.0)
+    val = Crippen.MolLogP(mol)
+    if NORMALIZE:
+        low_logp = -2.12178879609
+        high_logp = 6.0429063424
+        val = remap(val, low_logp, high_logp)
+        val = np.clip(val, 0.0, 1.0)
     return val
 
 #
@@ -858,8 +864,10 @@ def SA_score(mol):
         sascore = 10.0
     elif sascore < 1.:
         sascore = 1.0
-    val = remap(sascore, 5, 1.5)
-    val = np.clip(val, 0.0, 1.0)
+    val = sascore
+    if NORMALIZE:
+        val = remap(val, 5, 1.5)
+        val = np.clip(val, 0.0, 1.0)
     return val
 
 #
@@ -947,17 +955,19 @@ def NP_score(mol):
     bits = fp.GetNonzeroElements()
 
     # calculating the score
-    score = 0.
+    val = 0.
     for bit in bits:
-        score += NP_model.get(bit, 0)
-    score /= float(mol.GetNumAtoms())
+        val += NP_model.get(bit, 0)
+    val /= float(mol.GetNumAtoms())
 
     # preventing score explosion for exotic molecules
-    if score > 4:
-        score = 4. + math.log10(score - 4. + 1.)
-    if score < -4:
-        score = -4. - math.log10(-4. - score + 1.)
-    val = np.clip(remap(score, -3, 1), 0.0, 1.0)
+    if val > 4:
+        val = 4. + math.log10(val- 4. + 1.)
+    if val < -4:
+        val = -4. - math.log10(-4. - val + 1.)
+
+    if NORMALIZE:
+        val = np.clip(remap(val, -3, 1), 0.0, 1.0)
     return val
 
 #
