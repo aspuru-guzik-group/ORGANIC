@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function
 from builtins import range
 import os
+
 import numpy as np
+
 import csv
 import time
 import pickle
@@ -14,6 +16,7 @@ from rdkit import rdBase
 from rdkit import DataStructs
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import Crippen, MolFromSmiles, MolToSmiles, Descriptors
+
 from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 from copy import deepcopy
 from math import exp, log
@@ -593,9 +596,8 @@ def diversity(mol, fps):
     dist = DataStructs.BulkTanimotoSimilarity(
         ref_fps, fps, returnDistance=True)
     mean_dist = np.mean(np.array(dist))
-    if NORMALIZE:
-        val = remap(mean_dist, low_rand_dst, mean_div_dst)
-        val = np.clip(val, 0.0, 1.0)
+    val = remap(mean_dist, low_rand_dst, mean_div_dst)
+    val = np.clip(val, 0.0, 1.0)
     return val
 
 #
@@ -706,7 +708,6 @@ def batch_symmetry(smiles, train_smiles=None):
     vals = [apply_to_valid(s, symmetry) for s in smiles]
     return vals
 
-
 def symmetry(mol):
     try:
         ids, xyz = get3DCoords(mol)
@@ -772,15 +773,13 @@ This metric penalizes smiles strings that are too long, assuming that the
 canonic smile is the shortest representation.
 """
 
-
 def batch_conciseness(smiles, train_smiles=None):
     vals = [conciseness(s) if verify_sequence(s) else 0 for s in smiles]
     return vals
 
-
 def conciseness(smile, train_smiles=None):
     canon = canon_smile(smile)
-    diff_len = len(smile) - len(canon)
+    diff_len = len(smile) -len(canon)
     val = np.clip(diff_len, 0.0, 20)
     val = 1 - 1.0 / 20.0 * val
     return val
@@ -864,10 +863,8 @@ def SA_score(mol):
         sascore = 10.0
     elif sascore < 1.:
         sascore = 1.0
-    val = sascore
-    if NORMALIZE:
-        val = remap(val, 5, 1.5)
-        val = np.clip(val, 0.0, 1.0)
+    val = remap(sascore, 5, 1.5)
+    val = np.clip(val, 0.0, 1.0)
     return val
 
 #
@@ -884,12 +881,10 @@ an equally ponderated mean of the following factors:
     - Soft novelty
 """
 
-
 def batch_drugcandidate(smiles, train_smiles=None):
     vals = [drug_candidate(s, train_smiles)
             if verify_sequence(s) else 0 for s in smiles]
     return vals
-
 
 def drug_candidate(smile, train_smiles):
     mol = Chem.MolFromSmiles(smile)
@@ -909,11 +904,9 @@ This metric assigns 1.0 if the molecule follows Lipinski's rule of
 five and 0.0 if not.
 """
 
-
 def batch_lipinski(smiles, train_smiles):
     vals = [apply_to_valid(s, Lipinski) for s in smiles]
     return vals
-
 
 def Lipinski(mol):
     druglikeness = 0.0
@@ -930,8 +923,8 @@ def Lipinski(mol):
     for bond in mol.GetBonds():
         a1 = mol.GetAtomWithIdx(bond.GetBeginAtomIdx()).GetAtomicNum()
         a2 = mol.GetAtomWithIdx(bond.GetEndAtomIdx()).GetAtomicNum()
-        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8, 1)) else 0.0
-        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7, 1)) else 0.0
+        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8,1)) else 0.0
+        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7,1)) else 0.0
     druglikeness += 0.25 if donors <= 5 else 0.0
     return druglikeness
 
