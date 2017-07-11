@@ -458,12 +458,13 @@ def print_results(verified_samples, unverified_samples, results={}):
 # 2.1. Validity
 #
 
-"""
-Simplest metric. Assigns 1.0 if the SMILES is correct, and 0.0
-if not.
-"""
-
 def batch_validity(smiles, train_smiles=None):
+
+    """
+    Simplest metric. Assigns 1.0 if the SMILES is correct, and 0.0
+    if not.
+    """
+
     vals = [1.0 if verify_sequence(s) else 0.0 for s in smiles]
     return vals
 
@@ -471,12 +472,14 @@ def batch_validity(smiles, train_smiles=None):
 # 2.2. Diversity
 #
 
-"""
-This metric compares the Tanimoto distance of a given molecule
-with a random sample of the training smiles.
-"""
-
+    
 def batch_diversity(smiles, train_smiles):
+
+    """
+    This metric compares the Tanimoto distance of a given molecule
+    with a random sample of the training smiles.
+    """
+
     rand_smiles = random.sample(train_smiles, 100)
     rand_mols = [MolFromSmiles(s) for s in rand_smiles]
     fps = [Chem.GetMorganFingerprintAsBitVect(m, 4, nBits=2048) for m in rand_mols]
@@ -498,12 +501,14 @@ def diversity(mol, fps):
 # 2.3. Variety
 #
 
-"""
-This metric compares the Tanimoto distance of a given molecule
-with a random sample of the other generated smiles.
-"""
 
 def batch_variety(smiles, train_smiles=None):
+
+    """
+    This metric compares the Tanimoto distance of a given molecule
+    with a random sample of the other generated smiles.
+    """
+
     filtered = filter_smiles(smiles)
     mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(filtered, int(len(filtered)/10))]
     setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
@@ -524,12 +529,14 @@ def variety(mol, setfps):
 # 2.4. Novelty
 #
 
-"""
-These metrics check whether a given smile is in the provided
-training set or not.
-"""
 
 def batch_novelty(smiles, train_smiles):
+
+    """
+    This metric checks whether a given smile is in the provided
+    training set or not.
+    """
+
     vals = [novelty(smile, train_smiles) if verify_sequence(
         smile) else 0 for smile in smiles]
     return vals
@@ -560,12 +567,13 @@ def batch_softnovelty(smiles, train_smiles):
 # 2.5. Creativity
 #
 
-"""
-This metric computes the Tanimoto distance of a smile to the training set,
-as a measure of how different these molecules are from the provided ones.
-"""
-
 def batch_creativity(smiles, train_smiles):
+
+    """
+    This metric computes the Tanimoto distance of a smile to the training set,
+    as a measure of how different these molecules are from the provided ones.
+    """
+
     mols = [Chem.MolFromSmiles(smile) for smile in filter_smiles(train_smiles)]
     setfps = [Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048) for mol in mols]
     vals = [apply_to_valid(s, creativity, setfps=setfps) for s in smiles]
@@ -578,12 +586,13 @@ def creativity(mol, setfps):
 # 2.6. Symmetry
 #
 
-"""
-This metric yields 1.0 if the generated molecule has any element of symmetry, and 0.0
-if the point group is C1.
-"""
-
 def batch_symmetry(smiles, train_smiles=None):
+
+    """
+    This metric yields 1.0 if the generated molecule has any element of symmetry, and 0.0
+    if the point group is C1.
+    """
+
     vals = [apply_to_valid(s, symmetry) for s in smiles]
     return vals
 
@@ -616,16 +625,17 @@ def getSymmetry(ids, xyz):
 # 2.7. Solubility
 #
 
-"""
-This metric computes the logarithm of the water-octanol partition
-coefficient, using RDkit's implementation of Wildman-Crippen method, 
-and then remaps it to the 0.0-1.0 range.
-
-Wildman, S. A., & Crippen, G. M. (1999). Prediction of physicochemical parameters by atomic contributions. 
-Journal of chemical information and computer sciences, 39(5), 868-873.
-"""
-
 def batch_solubility(smiles, train_smiles=None):
+
+    """
+    This metric computes the logarithm of the water-octanol partition
+    coefficient, using RDkit's implementation of Wildman-Crippen method, 
+    and then remaps it to the 0.0-1.0 range.
+
+    Wildman, S. A., & Crippen, G. M. (1999). Prediction of physicochemical parameters by atomic contributions. 
+    Journal of chemical information and computer sciences, 39(5), 868-873.
+    """
+
     vals = [apply_to_valid(s, logP) for s in smiles]
     return vals
 
@@ -641,12 +651,13 @@ def logP(mol, train_smiles=None):
 # 2.8. Conciseness
 #
 
-"""
-This metric penalizes smiles strings that are too long, assuming that the
-canonic smile is the shortest representation.
-"""
-
 def batch_conciseness(smiles, train_smiles=None):
+
+    """
+    This metric penalizes smiles strings that are too long, assuming that the
+    canonic smile is the shortest representation.
+    """
+
     vals = [conciseness(s) if verify_sequence(s) else 0 for s in smiles]
     return vals
 
@@ -661,17 +672,18 @@ def conciseness(smile, train_smiles=None):
 # 2.9. Synthetic accesibility
 #
 
-"""
-This metric checks whether a given molecule is easy to synthesize or not.
-It is based on (although not completely equivalent to) the work of Ertl
-and Schuffenhauer.
-
-Ertl, P., & Schuffenhauer, A. (2009). Estimation of synthetic accessibility 
-score of drug-like molecules based on molecular complexity and fragment contributions. 
-Journal of cheminformatics, 1(1), 8.
-"""
-
 def batch_SA(smiles, train_smiles=None):
+
+    """
+    This metric checks whether a given molecule is easy to synthesize or not.
+    It is based on (although not completely equivalent to) the work of Ertl
+    and Schuffenhauer.
+
+    Ertl, P., & Schuffenhauer, A. (2009). Estimation of synthetic accessibility 
+    score of drug-like molecules based on molecular complexity and fragment contributions. 
+    Journal of cheminformatics, 1(1), 8.
+    """
+
     vals = [apply_to_valid(s, SA_score) for s in smiles]
     return vals
 
@@ -742,17 +754,18 @@ def SA_score(mol):
 # 2.10. Drug-likeness
 #
 
-"""
-This metric computes the 'drug-likeness' of a given molecule through
-an equally ponderated mean of the following factors:
-
-    - Logarithm of the water-octanol partition coefficient
-    - Synthetic accesibility
-    - Conciseness of the molecule
-    - Soft novelty
-"""
-
 def batch_drugcandidate(smiles, train_smiles=None):
+
+    """
+    This metric computes the 'drug-likeness' of a given molecule through
+    an equally ponderated mean of the following factors:
+
+        - Logarithm of the water-octanol partition coefficient
+        - Synthetic accesibility
+        - Conciseness of the molecule
+        - Soft novelty
+    """
+
     vals = [drug_candidate(s, train_smiles)
             if verify_sequence(s) else 0 for s in smiles]
     return vals
@@ -770,12 +783,12 @@ def drug_candidate(smile, train_smiles):
 # 2.11. Lipinski's rule of five
 #
 
-"""
-This metric assigns 1.0 if the molecule follows Lipinski's rule of
-five and 0.0 if not.
-"""
-
 def batch_lipinski(smiles, train_smiles):
+
+    """
+    This metric assigns 0.25 for each of the four terms of Lipinski's
+    rule-of-five
+    """
     vals = [apply_to_valid(s, Lipinski) for s in smiles]
     return vals
 
@@ -803,12 +816,13 @@ def Lipinski(mol):
 # 2.12. NP-likeness
 #
 
-"""
-This metric computes the likelihood that a given molecule is
-a natural product.
-"""
-
 def batch_NPLikeliness(smiles, train_smiles=None):
+
+    """
+    This metric computes the likelihood that a given molecule is
+    a natural product.
+    """
+
     vals = [apply_to_valid(s, NP_score) for s in smiles]
     return vals
 
@@ -834,13 +848,14 @@ def NP_score(mol):
 # 2.13. PCE
 #
 
-"""
-This metric computes the Power Conversion Efficiency of a organic
-solar cell built with a given molecule, using a CNN on a 64x64/32x32
-bit array containing Morgan fingerprints.
-"""
-
 def batch_PCE(smiles, train_smiles=None):
+
+    """
+    This metric computes the Power Conversion Efficiency of a organic
+    solar cell built with a given molecule, using a CNN on a 64x64/32x32
+    bit array containing Morgan fingerprints.
+    """
+
     cnn = cnn_pce(lbit=32)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
@@ -849,12 +864,13 @@ def batch_PCE(smiles, train_smiles=None):
 # 2.14. Bandgap
 #
 
-"""
-This metric computes the HOMO-LUMO energy difference of a given 
-molecule,using a CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
-"""
-
 def batch_bandgap(smiles, train_smiles=None):
+
+    """
+    This metric computes the HOMO-LUMO energy difference of a given 
+    molecule,using a CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
+    """
+
     cnn = cnn_homolumo(lbit=32)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
@@ -863,12 +879,13 @@ def batch_bandgap(smiles, train_smiles=None):
 # 2.15. Substructure match
 #
 
-"""
-This metric assigns 1.0 if a previously defined substructure (through the global 
-variable obj_substructure) is present in a given molecule, and 0.0 if not.
-"""
-
 def batch_substructure_match(smiles, train_smiles=None):
+
+    """
+    This metric assigns 1.0 if a previously defined substructure (through the global 
+    variable obj_substructure) is present in a given molecule, and 0.0 if not.
+    """
+
     if substructure_match == None:
         print('No substructure has been specified')
         raise
@@ -883,11 +900,12 @@ def substructure_match(mol, train_smiles=None, sub_mol=None):
 # 2.16. Chemical beauty
 #
 
-"""
-Bickerton, G. R., Paolini, G. V., Besnard, J., Muresan, S., & Hopkins, A. L. (2012). Quantifying the chemical beauty of drugs. Nature chemistry, 4(2), 90-98.
-"""
-
 def batch_beauty(smiles, train_smiles=None):
+
+    """
+    Bickerton, G. R., Paolini, G. V., Besnard, J., Muresan, S., & Hopkins, A. L. (2012). Quantifying the chemical beauty of drugs. Nature chemistry, 4(2), 90-98.
+    """
+
     vals = [apply_to_valid(s, chemical_beauty) for s in smiles]
     return vals
 
@@ -937,12 +955,12 @@ def chemical_beauty(mol, gerebtzoff = True):
 # 2.17. Density
 #
 
-"""
-This metric computes the density of a given molecule, using a CNN 
-on a 64x64/32x32 bit array containing Morgan fingerprints.
-"""
-
 def batch_density(smiles, train_smiles=None):
+
+    """
+    This metric computes the density of a given molecule, using a CNN 
+    on a 64x64/32x32 bit array containing Morgan fingerprints.
+    """
     cnn = cnn_density(lbit=32)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
@@ -951,12 +969,13 @@ def batch_density(smiles, train_smiles=None):
 # 2.18. Melting point
 #
 
-"""
-This metric computes the melting point of a given  molecule, using a 
-CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
-"""
-
 def batch_mp(smiles, train_smiles=None):
+
+    """
+    This metric computes the melting point of a given  molecule, using a 
+    CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
+    """
+
     cnn = cnn_mp(lbit=32)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
@@ -965,12 +984,13 @@ def batch_mp(smiles, train_smiles=None):
 # 2.19. Melting point
 #
 
-"""
-This metric computes the mutagenicity of a given  molecule, using a 
-CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
-"""
-
 def batch_mp(smiles, train_smiles=None):
+
+    """
+    This metric computes the mutagenicity of a given  molecule, using a 
+    CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
+    """
+
     cnn = cnn_mp(lbit=32)
     vals = [cnn.predict(smile) if verify_sequence(smile) else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
