@@ -16,8 +16,8 @@ from rollout import ROLLOUT
 import pandas as pd
 import importlib
 import sys
-import shutil
 from tqdm import tqdm
+from tensorflow.python import debug as tf_debug
 
 # GPU support
 try:
@@ -321,8 +321,11 @@ def main():
         print('\tAccuracy: {}'.format(accuracy))
         return loss, accuracy
 
-    # Pretrain is checkpointed and only execcutes if we don't find a checkpoint
+    # Loading previous checkpoints
     saver = tf.train.Saver()
+    pretrain_is_loaded = False
+    sess_is_loaded = False
+
     ckpt_dir = 'checkpoints/{}_pretrain'.format(PREFIX)
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
@@ -330,18 +333,36 @@ def main():
     if os.path.isfile(ckpt_file + '.meta') and params["LOAD_PRETRAIN"]:
         saver.restore(sess, ckpt_file)
         print('Pretrain loaded from previous checkpoint {}'.format(ckpt_file))
+        pretrain_is_loaded = True
     else:
         if params["LOAD_PRETRAIN"]:
             print('\t* No pre-training data found as {:s}.'.format(ckpt_file))
         else:
             print('\t* LOAD_PRETRAIN was set to false.')
 
+    rollout = ROLLOUT(generator, 0.8)
+
+    if params['LOAD_PREV_SESS']:
+        saver = tf.train.Saver()
+        ckpt_dir = 'checkpoints/{}'.format(PREFIX)
+        if not os.path.exists(ckpt_dir):
+            os.makedirs(ckpt_dir)
+        ckpt_file = os.path.join(ckpt_dir, params['PREV_CKPT'])
+        if os.path.isfile(ckpt_file + '.meta'):
+            saver.restore(sess, ckpt_file)
+            print('Training loaded from previous checkpoint {}'.format(ckpt_file))
+            sess_is_loaded = True
+        else:
+            print('\t* No training data found as {:s}.'.format(ckpt_file))
+    else:
+        print('\t* LOAD_PREV_SESS was set to false.')
+
+    if not pretrain_is_loaded and not sess_is_loaded: 
         sess.run(tf.global_variables_initializer())
         pretrain(sess, generator, train_discriminator)
         path = saver.save(sess, ckpt_file)
         print('Pretrain finished and saved at {}'.format(path))
-
-    rollout = ROLLOUT(generator, 0.8)
+ 
 
     print('#########################################################################')
     print('Start Reinforcement Training Generator...')
