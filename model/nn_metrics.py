@@ -1,59 +1,12 @@
-import pandas as pd
 import numpy as np
 import rdkit.Chem.AllChem as Chem
 from keras.layers import Dense, Dropout
-from keras.models import Sequential, load_model
+from keras.models import Sequential
 from keras.layers.normalization import BatchNormalization
 from keras.callbacks import EarlyStopping
+from keras_tqdm import TQDMCallback
 
-
-class CustomNN(object):
-
-    """
-    Class containing the methods for the ChemORGAN
-    pre-trained neural network methods. 
-
-    Arguments:
-
-        - label. Identifies the property predicted
-           by the neural network.
-
-        - nBits. Refers to the number of bits in which
-           the Morgan fingerprints are encoded. By
-           default, 4096.
-
-    """
-
-    def __init__(self, label, nBits=4096):
-
-        self.nBits = nBits
-        self.nn = self.model(self.nBits)
-
-    def model(self, dim):
-
-        """
-        Generates a Keras DNN architecture.
-
-        Arguments:
-
-            - dim. The dimension of the input vector.
-
-        Returns:
-
-            A keras.Sequential() object with the DNN 
-            architecture.
-
-        """
-
-        model = Sequential()
-        model.add(Dropout(0.2,input_shape=(4096,)))
-        model.add(BatchNormalization())
-        model.add(Dense(4096, activation='relu', kernel_initializer='normal'))
-        model.add(Dense(4096, activation='relu', kernel_initializer='normal'))
-        model.add(Dense(1, activation='linear', kernel_initializer='normal'))
-        model.compile(optimizer='adam',
-                 loss='mse')
-        return model
+class NN(object):
 
     def predict(self, smiles, batch_size=1000):
 
@@ -122,7 +75,8 @@ class CustomNN(object):
 
 
         input_x = self.computeFingerprints(train_x)
-        callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.01, patience=10, verbose=0, mode='auto')]
+        callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.01, patience=10, verbose=0, mode='auto'),
+            TQDMCallback()]
         history = self.nn.fit(input_x, train_y,
             shuffle=True,
             epochs=nepochs,
@@ -172,19 +126,53 @@ class CustomNN(object):
         return [float(i) for i in fp]
 
 
-if __name__ == '__main__':
 
-    try:
-        gpu_free_number = str(pick_gpus_lowest_memory()[0, 0])
-        os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
-        print('GPUs {} detected and selected'.format(gpu_free_number))
-    except:
-        print('No GPU detected')
-        pass
+class CustomNN(NN):
 
-    cnn = CustomNN('pce')
-    data = pd.read_csv('../data/opv.csv')
-    smiles = np.asarray(data['smiles'])
-    pce = np.asarray(data['PCE_calib'])
-    cnn.train(smiles, pce, 100, 100)
-    cnn.nn.save_model('pce64.h5')
+    """
+    Class containing the methods for the ChemORGAN
+    pre-trained neural network methods. 
+
+    Arguments:
+
+        - label. Identifies the property predicted
+           by the neural network.
+
+        - nBits. Refers to the number of bits in which
+           the Morgan fingerprints are encoded. By
+           default, 4096.
+
+    """
+
+    def __init__(self, label, nBits=4096):
+
+        self.nBits = nBits
+        self.nn = self.model(self.nBits)
+
+    def model(self, dim):
+
+        """
+        Generates a Keras DNN architecture.
+
+        Arguments:
+
+            - dim. The dimension of the input vector.
+
+        Returns:
+
+            A keras.Sequential() object with the DNN 
+            architecture.
+
+        """
+
+        model = Sequential()
+        model.add(Dropout(0.2,input_shape=(4096,)))
+        model.add(BatchNormalization())
+        model.add(Dense(300, activation='relu', kernel_initializer='normal'))
+        model.add(Dense(300, activation='relu', kernel_initializer='normal'))
+        model.add(Dense(1, activation='linear', kernel_initializer='normal'))
+        model.compile(optimizer='adam', loss='mse')
+
+        return model
+
+

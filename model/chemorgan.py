@@ -8,34 +8,45 @@ import numpy as np
 import tensorflow as tf
 import random
 import time
+import mol_methods as mm
 import json
 from data_loaders import Gen_Dataloader, Dis_Dataloader
 from discriminator import Discriminator
 import pandas as pd
-import importlib
-import sys
 from tqdm import tqdm
 
 
 class ChemORGAN(object):
 
-    def __init__(self, PARAM_FILE='exp.json'):
+    def __init__(self, params=None, read_file=True, params_file='exp.json'):
 
-        # Check whether GPU can be used
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+
+        print("   ___  _                         ___    __     ___    _        __  ")
+        print("  / __\| |__    ___  _ __ ___    /___\  /__\   / _ \  /_\    /\ \ \ ")
+        print(" / /   | '_ \\  / _ \| '_ ` _ \  //  // / \//  / /_\/ //_\\  /  \/ / ")
+        print("/ /___ | | | ||  __/| | | | | |/ \_// / _  \ / /_\\ /  _  \/ /\  /  ")
+        print("\____/ |_| |_| \___||_| |_| |_|\___/  \/ \_/ \____/ \_/ \_/\_\ \/   ")
+        print("\n                                           version {}.{}            ".format(1, 0))
+        print('\n\nCarlos OUTEIRAL, Benjamin SANCHEZ-LENGELING, Gabriel GUIMARAES \nand Alan ASPURU-GUZIK\n')
+        print('Department of Chemistry and Chemical Biology\nHarvard University')
+        print('#########################################################################\n\n')
+
+        print('Setting up GPU...')                                                           
         self.detect_gpu()
 
-        # Read data from exp.json
-        if len(sys.argv) == 2:
-            PARAM_FILE = sys.argv[1]
-        self.params = json.loads(open(PARAM_FILE).read(), object_pairs_hook=OrderedDict)
+        if read_file == True:
+            self.params = json.loads(open(params_file).read(), object_pairs_hook=OrderedDict)
+            print('Parameters loaded from {}'.format(params_file))
+        elif params is not None:
+            self.params = params
+            print('Parameters loaded from user-specified dictionary.')
+        else:
+            raise ValueError('No parameters were specified.')
 
-        # Set all parameters
-        self.mm = importlib.import_module(self.params['METRICS_FILE'])
         self.set_hyperparameters()
         self.set_parameters()
 
-        random.seed(self.SEED)
-        np.random.seed(self.SEED)
         self.gen_loader = Gen_Dataloader(self.BATCH_SIZE)
         self.dis_loader = Dis_Dataloader()
 
@@ -44,6 +55,28 @@ class ChemORGAN(object):
         self.set_discriminator()
 
         self.sess = tf.Session(config=self.config)
+
+    def setTrainingProgram(self, batches, objectives):
+
+        if (type(batches) is list) or (type(objectives) is list):
+
+            self.TRAINING_PROGRAM = True
+            if type(objectives) is not list or type(batches) is not list:
+                raise ValueError("Unmatching training program parameters")
+            if len(objectives) != len(batches):
+                raise ValueError("Unmatching training program parameters")
+            self.TOTAL_BATCH = np.sum(np.asarray(batches))
+
+            i = 0
+            self.EDUCATION = {}
+            for j, stage in enumerate(batches):
+                for _ in range(stage):
+                    self.EDUCATION[i] = objectives[j]
+                    i += 1
+        else:
+            self.TRAINING_PROGRAM = False
+            self.TOTAL_BATCH = batches
+            self.OBJECTIVE = objectives
 
     def pretrain(self, sess, generator, train_discriminator):
         # samples = generate_samples(sess, BATCH_SIZE, generated_num)
@@ -60,7 +93,7 @@ class ChemORGAN(object):
                 samples = self.generate_samples(sess, generator, self.BATCH_SIZE, self.SAMPLE_NUM)
                 self.gen_loader.create_batches(samples)
                 print('\t train_loss {}'.format(loss))
-                self.mm.compute_results(samples, self.train_samples, self.ord_dict, results)
+                mm.compute_results(samples, self.train_samples, self.ord_dict, results)
 
         samples = self.generate_samples(sess, generator, self.BATCH_SIZE, self.SAMPLE_NUM)
         self.gen_loader.create_batches(samples)
@@ -86,7 +119,6 @@ class ChemORGAN(object):
         if verbose:
             print('Sample generation time: %f' % (end - start))
         return generated_samples
-
 
     def pre_train_epoch(self, sess, trainable_model, data_loader):
         supervised_g_losses = []
@@ -162,7 +194,6 @@ class ChemORGAN(object):
             print('No GPU detected')
             pass
 
-
     def set_hyperparameters(self):
 
         # Training hyperparameters
@@ -177,27 +208,6 @@ class ChemORGAN(object):
 
         self.BATCHES = self.params['TOTAL_BATCH']
         self.OBJECTIVE = self.params['OBJECTIVE']
-
-        if (type(self.BATCHES) is list) or (type(self.OBJECTIVE) is list):
-
-            self.TRAINING_PROGRAM = True
-            if type(self.OBJECTIVE) is not list or type(self.BATCHES) is not list:
-                print("Unmatching training program parameters")
-                raise
-            if len(self.OBJECTIVE) != len(self.BATCHES):
-                print("Unmatching training program parameters")
-                raise
-            self.TOTAL_BATCH = np.sum(np.asarray(self.BATCHES))
-
-            i = 0
-            self.education = {}
-            for j, stage in enumerate(self.BATCHES):
-                for _ in range(stage):
-                    self.education[i] = self.OBJECTIVE[j]
-                    i += 1
-        else:
-            self.TRAINING_PROGRAM = False
-            self.TOTAL_BATCH = self.BATCHES
 
         # Generator hyperparameters
         self.EMB_DIM = 32
@@ -218,14 +228,14 @@ class ChemORGAN(object):
 
     def set_parameters(self):
 
-        self.train_samples = self.mm.load_train_data(self.params['TRAIN_FILE'])
-        self.char_dict, self.ord_dict = self.mm.build_vocab(self.train_samples)
+        self.train_samples = mm.load_train_data(self.params['TRAIN_FILE'])
+        self.char_dict, self.ord_dict = mm.build_vocab(self.train_samples)
         self.NUM_EMB = len(self.char_dict)
         self.DATA_LENGTH = max(map(len, self.train_samples))
         self.MAX_LENGTH = self.params["MAX_LENGTH"]
-        to_use = [sample for sample in self.train_samples if self.mm.verified_and_below(
+        to_use = [sample for sample in self.train_samples if mm.verified_and_below(
             sample, self.MAX_LENGTH)]
-        self.positive_samples = [self.mm.encode(sample, self.MAX_LENGTH, self.char_dict)
+        self.positive_samples = [mm.encode(sample, self.MAX_LENGTH, self.char_dict)
                             for sample in to_use]
         self.POSITIVE_NUM = len(self.positive_samples)
         print('Starting ObjectiveGAN for {:7s}'.format(self.PREFIX))
@@ -236,17 +246,19 @@ class ChemORGAN(object):
             np.mean([len(s) for s in to_use])))
         print('Num valid data points is  {:7d}'.format(self.POSITIVE_NUM))
         print('Size of alphabet is       {:7d}'.format(self.NUM_EMB))
+        random.seed(self.SEED)
+        np.random.seed(self.SEED)
 
-        self.mm.print_params(self.params)
+        mm.print_params(self.params)
 
     def make_reward(self, train_samples, nbatch):
 
         if self.TRAINING_PROGRAM == False:
 
-            reward_func = self.mm.load_reward(self.OBJECTIVE)
+            reward_func = mm.load_reward(self.OBJECTIVE)
 
             def batch_reward(samples):
-                decoded = [self.mm.decode(sample, self.ord_dict) for sample in samples]
+                decoded = [mm.decode(sample, self.ord_dict) for sample in samples]
                 pct_unique = len(list(set(decoded))) / float(len(decoded))
                 rewards = reward_func(decoded, train_samples)
                 weights = np.array([pct_unique / float(decoded.count(sample))
@@ -258,10 +270,10 @@ class ChemORGAN(object):
 
         else:
 
-            reward_func = self.mm.load_reward(self.education[nbatch])
+            reward_func = mm.load_reward(self.education[nbatch])
 
             def batch_reward(samples):
-                decoded = [self.mm.decode(sample, self.ord_dict) for sample in samples]
+                decoded = [mm.decode(sample, self.ord_dict) for sample in samples]
                 pct_unique = len(list(set(decoded))) / float(len(decoded))
                 rewards = reward_func(decoded, train_samples)
                 weights = np.array([pct_unique / float(decoded.count(sample))
@@ -368,7 +380,7 @@ class ChemORGAN(object):
                 results['Batch'] = nbatch
 
                 # results
-                self.mm.compute_results(gen_samples, self.train_samples, self.ord_dict, results)
+                mm.compute_results(gen_samples, self.train_samples, self.ord_dict, results)
 
             print('#########################################################################')
             print('-> Training generator with RL.')
@@ -405,5 +417,6 @@ class ChemORGAN(object):
 if __name__ == '__main__':
 
     model = ChemORGAN()
-    model.load_prev()
-    model.train()
+
+    # model.load_prev()
+    # model.train()
