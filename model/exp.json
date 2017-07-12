@@ -10,7 +10,7 @@
     "D_PRETRAIN_STEPS":2,
     "MAX_LENGTH":40,
     "BATCH_SIZE":1,
-    "LOAD_PRETRAIN":false,
+    "LOAD_PRETRAIN":true,
     "LOAD_PREV_SESS":true,
     "PREV_CKPT":"metrics_model_final.ckpt",
     "EPOCH_SAVES":2,
