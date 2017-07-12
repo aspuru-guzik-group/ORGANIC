@@ -1,9 +1,7 @@
 from __future__ import absolute_import, division, print_function
 from builtins import range
 import os
-
 import numpy as np
-
 import csv
 import time
 import pickle
@@ -16,11 +14,9 @@ from rdkit import rdBase
 from rdkit import DataStructs
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import Crippen, MolFromSmiles, MolToSmiles, Descriptors
-
 from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 from copy import deepcopy
 from math import exp, log
-from cnn_metrics import cnn_pce, cnn_homolumo
 from collections import OrderedDict
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
@@ -42,6 +38,12 @@ rdBase.DisableLog('rdApp.error')
 
 
 def read_smi(filename):
+
+    """
+    Function to read a .smi file.
+
+    """
+
     with open(filename) as file:
         smiles = file.readlines()
     smiles = [i.strip() for i in smiles]
