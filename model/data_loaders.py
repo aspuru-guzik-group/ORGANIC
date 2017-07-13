@@ -22,7 +22,8 @@ class Gen_Dataloader():
 
 
 def split_unicode_chrs(text):
-    _unicode_chr_splitter = _Re('(?s)((?:[\ud800-\udbff][\udc00-\udfff])|.)').split
+    _unicode_chr_splitter = _Re(
+        '(?s)((?:[\ud800-\udbff][\udc00-\udfff])|.)').split
     return [chr for chr in _unicode_chr_splitter(text) if chr]
 
 
@@ -52,7 +53,8 @@ class Dis_Dataloader():
         Returns input vectors, labels, vocabulary, and inverse vocabulary.
         """
         # Load and preprocess data
-        sentences, labels = self.load_data_and_labels(positive_file, negative_file)
+        sentences, labels = self.load_data_and_labels(
+            positive_file, negative_file)
         shuffle_indices = np.random.permutation(np.arange(len(labels)))
         x_shuffled = sentences[shuffle_indices]
         y_shuffled = labels[shuffle_indices]

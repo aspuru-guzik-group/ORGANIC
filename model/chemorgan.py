@@ -20,7 +20,7 @@ class ChemORGAN(object):
 
     def __init__(self, params=None, read_file=True, params_file='exp.json'):
 
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
         print("   ___  _                         ___    __     ___    _        __  ")
         print("  / __\| |__    ___  _ __ ___    /___\  /__\   / _ \  /_\    /\ \ \ ")
@@ -30,13 +30,15 @@ class ChemORGAN(object):
         print("\n                                           version {}.{}            ".format(1, 0))
         print('\n\nCarlos OUTEIRAL, Benjamin SANCHEZ-LENGELING, Gabriel GUIMARAES \nand Alan ASPURU-GUZIK\n')
         print('Department of Chemistry and Chemical Biology\nHarvard University')
-        print('#########################################################################\n\n')
+        print(
+            '#########################################################################\n\n')
 
-        print('Setting up GPU...')                                                           
+        print('Setting up GPU...')
         self.detect_gpu()
 
         if read_file == True:
-            self.params = json.loads(open(params_file).read(), object_pairs_hook=OrderedDict)
+            self.params = json.loads(
+                open(params_file).read(), object_pairs_hook=OrderedDict)
             print('Parameters loaded from {}'.format(params_file))
         elif params is not None:
             self.params = params
@@ -51,7 +53,7 @@ class ChemORGAN(object):
         self.dis_loader = Dis_Dataloader()
 
         self.generator = Generator(self.NUM_EMB, self.BATCH_SIZE, self.EMB_DIM,
-                          self.HIDDEN_DIM, self.MAX_LENGTH, self.START_TOKEN)
+                                   self.HIDDEN_DIM, self.MAX_LENGTH, self.START_TOKEN)
         self.set_discriminator()
 
         self.sess = tf.Session(config=self.config)
@@ -90,15 +92,19 @@ class ChemORGAN(object):
             print(' gen pre-train')
             loss = self.pre_train_epoch(sess, generator, self.gen_loader)
             if epoch == 10 or epoch % 40 == 0:
-                samples = self.generate_samples(sess, generator, self.BATCH_SIZE, self.SAMPLE_NUM)
+                samples = self.generate_samples(
+                    sess, generator, self.BATCH_SIZE, self.SAMPLE_NUM)
                 self.gen_loader.create_batches(samples)
                 print('\t train_loss {}'.format(loss))
-                mm.compute_results(samples, self.train_samples, self.ord_dict, results)
+                mm.compute_results(
+                    samples, self.train_samples, self.ord_dict, results)
 
-        samples = self.generate_samples(sess, generator, self.BATCH_SIZE, self.SAMPLE_NUM)
+        samples = self.generate_samples(
+            sess, generator, self.BATCH_SIZE, self.SAMPLE_NUM)
         self.gen_loader.create_batches(samples)
 
-        samples = self.generate_samples(sess, generator, self.BATCH_SIZE, self.SAMPLE_NUM)
+        samples = self.generate_samples(
+            sess, generator, self.BATCH_SIZE, self.SAMPLE_NUM)
         self.gen_loader.create_batches(samples)
 
         print('Start training discriminator...')
@@ -144,9 +150,10 @@ class ChemORGAN(object):
                 l2_reg_lambda=self.dis_l2_reg_lambda)
 
         self.dis_params = [param for param in tf.trainable_variables()
-                      if 'discriminator' in param.name]
+                           if 'discriminator' in param.name]
         # Define Discriminator Training procedure
-        self.dis_global_step = tf.Variable(0, name="global_step", trainable=False)
+        self.dis_global_step = tf.Variable(
+            0, name="global_step", trainable=False)
         self.dis_optimizer = tf.train.AdamOptimizer(1e-4)
         self.dis_grads_and_vars = self.dis_optimizer.compute_gradients(
             self.discriminator.loss, self.dis_params, aggregation_method=2)
@@ -222,7 +229,8 @@ class ChemORGAN(object):
         # Discriminator hyperparameters
         self.dis_embedding_dim = 64
         self.dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
-        self.dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
+        self.dis_num_filters = [100, 200, 200, 200,
+                                200, 100, 100, 100, 100, 100, 160, 160]
         self.dis_dropout_keep_prob = 0.75
         self.dis_l2_reg_lambda = 0.2
 
@@ -236,10 +244,11 @@ class ChemORGAN(object):
         to_use = [sample for sample in self.train_samples if mm.verified_and_below(
             sample, self.MAX_LENGTH)]
         self.positive_samples = [mm.encode(sample, self.MAX_LENGTH, self.char_dict)
-                            for sample in to_use]
+                                 for sample in to_use]
         self.POSITIVE_NUM = len(self.positive_samples)
         print('Starting ObjectiveGAN for {:7s}'.format(self.PREFIX))
-        print('Data points in train_file {:7d}'.format(len(self.train_samples)))
+        print('Data points in train_file {:7d}'.format(
+            len(self.train_samples)))
         print('Max data length is        {:7d}'.format(self.DATA_LENGTH))
         print('Max length to use is      {:7d}'.format(self.MAX_LENGTH))
         print('Avg length to use is      {:7f}'.format(
@@ -258,7 +267,8 @@ class ChemORGAN(object):
             reward_func = mm.load_reward(self.OBJECTIVE)
 
             def batch_reward(samples):
-                decoded = [mm.decode(sample, self.ord_dict) for sample in samples]
+                decoded = [mm.decode(sample, self.ord_dict)
+                           for sample in samples]
                 pct_unique = len(list(set(decoded))) / float(len(decoded))
                 rewards = reward_func(decoded, train_samples)
                 weights = np.array([pct_unique / float(decoded.count(sample))
@@ -273,7 +283,8 @@ class ChemORGAN(object):
             reward_func = mm.load_reward(self.education[nbatch])
 
             def batch_reward(samples):
-                decoded = [mm.decode(sample, self.ord_dict) for sample in samples]
+                decoded = [mm.decode(sample, self.ord_dict)
+                           for sample in samples]
                 pct_unique = len(list(set(decoded))) / float(len(decoded))
                 rewards = reward_func(decoded, train_samples)
                 weights = np.array([pct_unique / float(decoded.count(sample))
@@ -331,7 +342,8 @@ class ChemORGAN(object):
             pretrain_is_loaded = True
         else:
             if self.params["LOAD_PRETRAIN"]:
-                print('\t* No pre-training data found as {:s}.'.format(ckpt_file))
+                print(
+                    '\t* No pre-training data found as {:s}.'.format(ckpt_file))
             else:
                 print('\t* LOAD_PRETRAIN was set to false.')
 
@@ -352,7 +364,7 @@ class ChemORGAN(object):
         else:
             print('\t* LOAD_PREV_SESS was set to false.')
 
-        if not pretrain_is_loaded and not sess_is_loaded: 
+        if not pretrain_is_loaded and not sess_is_loaded:
             self.sess.run(tf.global_variables_initializer())
             self.pretrain(self.sess, self.generator, self.train_discriminator)
             path = saver.save(self.sess, ckpt_file)
@@ -379,9 +391,11 @@ class ChemORGAN(object):
                 results['Batch'] = nbatch
 
                 # results
-                mm.compute_results(gen_samples, self.train_samples, self.ord_dict, results)
+                mm.compute_results(
+                    gen_samples, self.train_samples, self.ord_dict, results)
 
-            print('#########################################################################')
+            print(
+                '#########################################################################')
             print('-> Training generator with RL.')
             print('G Epoch {}'.format(nbatch))
 
@@ -389,7 +403,8 @@ class ChemORGAN(object):
                 samples = self.generator.generate(self.sess)
                 rewards = self.rollout.get_reward(
                     self.sess, samples, 16, self.discriminator, batch_reward, self.D_WEIGHT)
-                nll = self.generator.generator_step(self.sess, samples, rewards)
+                nll = self.generator.generator_step(
+                    self.sess, samples, rewards)
                 # results
                 self.print_rewards(rewards)
                 print('neg-loglike: {}'.format(nll))
@@ -406,10 +421,12 @@ class ChemORGAN(object):
             print('results')
             results_rows.append(results)
             if nbatch % self.params["EPOCH_SAVES"] == 0:
-                self.save_results(self.sess, self.PREFIX, self.PREFIX + '_model', results_rows, nbatch)
+                self.save_results(self.sess, self.PREFIX,
+                                  self.PREFIX + '_model', results_rows, nbatch)
 
         # write results
-        self.save_results(self.sess, self.PREFIX, self.PREFIX + '_model', results_rows)
+        self.save_results(self.sess, self.PREFIX,
+                          self.PREFIX + '_model', results_rows)
 
         print('\n:*** FINISHED ***')
 

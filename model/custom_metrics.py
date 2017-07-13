@@ -26,7 +26,7 @@ print(MOD_PATH)
 
 
 def readNPModel(filename=None):
-    print("mol_metrics: reading NP model ...",end=' ')
+    print("mol_metrics: reading NP model ...", end=' ')
     if filename is None:
         filename = os.path.join(MOD_PATH, 'NP_score.pkl.gz')
     start = time.time()
@@ -39,7 +39,8 @@ def readNPModel(filename=None):
 def readSubstructuresFile(filename, label='positive'):
     if os.path.exists(filename):
         smiles = read_smi(filename)
-        print("mol_metrics: reading {} substructures from {} ...".format(len(smiles),label))
+        print("mol_metrics: reading {} substructures from {} ...".format(
+            len(smiles), label))
         patterns = [Chem.MolFromSmarts(s) for s in smiles]
     else:
         print('\tno substurctures file found, if using substructure scoring save smiles/smarts in {}smi'.format(label))
@@ -48,7 +49,7 @@ def readSubstructuresFile(filename, label='positive'):
 
 
 def readSAModel(filename=None):
-    print("mol_metrics: reading SA model ...",end=' ')
+    print("mol_metrics: reading SA model ...", end=' ')
     if filename is None:
         filename = os.path.join(MOD_PATH, 'SA_score.pkl.gz')
     start = time.time()
@@ -244,8 +245,6 @@ pads2 = [[2.817065973, 392.5754953, 290.7489764, 2.419764353, 49.22325677, 65.37
          [0.010000000, 1199.094025, -0.09002883, 0.000000001, 0.185904477, 0.875193782, 417.7253140]]
 
 
-
-
 ############################################
 #
 #   2.MOLECULAR METRICS
@@ -423,6 +422,7 @@ def batch_symmetry(smiles, train_smiles=None):
     vals = [apply_to_valid(s, symmetry) for s in smiles]
     return vals
 
+
 def symmetry(mol):
     try:
         ids, xyz = get3DCoords(mol)
@@ -488,13 +488,15 @@ This metric penalizes smiles strings that are too long, assuming that the
 canonic smile is the shortest representation.
 """
 
+
 def batch_conciseness(smiles, train_smiles=None):
     vals = [conciseness(s) if verify_sequence(s) else 0 for s in smiles]
     return vals
 
+
 def conciseness(smile, train_smiles=None):
     canon = canon_smile(smile)
-    diff_len = len(smile) -len(canon)
+    diff_len = len(smile) - len(canon)
     val = np.clip(diff_len, 0.0, 20)
     val = 1 - 1.0 / 20.0 * val
     return val
@@ -596,10 +598,12 @@ an equally ponderated mean of the following factors:
     - Soft novelty
 """
 
+
 def batch_drugcandidate(smiles, train_smiles=None):
     vals = [drug_candidate(s, train_smiles)
             if verify_sequence(s) else 0 for s in smiles]
     return vals
+
 
 def drug_candidate(smile, train_smiles):
     mol = Chem.MolFromSmiles(smile)
@@ -619,9 +623,11 @@ This metric assigns 1.0 if the molecule follows Lipinski's rule of
 five and 0.0 if not.
 """
 
+
 def batch_lipinski(smiles, train_smiles):
     vals = [apply_to_valid(s, Lipinski) for s in smiles]
     return vals
+
 
 def Lipinski(mol):
     druglikeness = 0.0
@@ -638,8 +644,8 @@ def Lipinski(mol):
     for bond in mol.GetBonds():
         a1 = mol.GetAtomWithIdx(bond.GetBeginAtomIdx()).GetAtomicNum()
         a2 = mol.GetAtomWithIdx(bond.GetEndAtomIdx()).GetAtomicNum()
-        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8,1)) else 0.0
-        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7,1)) else 0.0
+        donors += 1 if ((a1, a2) == (1, 8)) or ((a1, a2) == (8, 1)) else 0.0
+        donors += 1 if ((a1, a2) == (1, 7)) or ((a1, a2) == (7, 1)) else 0.0
     druglikeness += 0.25 if donors <= 5 else 0.0
     return druglikeness
 
@@ -670,7 +676,7 @@ def NP_score(mol):
 
     # preventing score explosion for exotic molecules
     if val > 4:
-        val = 4. + math.log10(val- 4. + 1.)
+        val = 4. + math.log10(val - 4. + 1.)
     if val < -4:
         val = -4. - math.log10(-4. - val + 1.)
 
