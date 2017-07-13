@@ -2,11 +2,8 @@ from __future__ import absolute_import, division, print_function
 import os
 import csv
 import numpy as np
-import custom_metrics as cm
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import MolFromSmiles, MolToSmiles
-from collections import OrderedDict
-from custom_metrics import load_reward
 
 def read_smi(filename):
     """
