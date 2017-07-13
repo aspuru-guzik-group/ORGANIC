@@ -48,8 +48,8 @@ class ChemORGAN(object):
             raise ValueError('No parameters were specified.')
 
         self.set_hyperparameters()
-        self.set_parameters()
-
+        self.set_training_program()
+        print('setup training programm')
         self.gen_loader = Gen_Dataloader(self.BATCH_SIZE)
         self.dis_loader = Dis_Dataloader()
 
@@ -59,10 +59,11 @@ class ChemORGAN(object):
 
         self.sess = tf.Session(config=self.config)
 
-    def setTrainingProgram(self, batches, objectives):
+    def set_training_program(self):
+        batches = self.params["TOTAL_BATCH"]
+        objectives = self.params["OBJECTIVE"]
 
         if (type(batches) is list) or (type(objectives) is list):
-
             self.TRAINING_PROGRAM = True
             if type(objectives) is not list or type(batches) is not list:
                 raise ValueError("Unmatching training program parameters")
@@ -80,6 +81,7 @@ class ChemORGAN(object):
             self.TRAINING_PROGRAM = False
             self.TOTAL_BATCH = batches
             self.OBJECTIVE = objectives
+            self.EDUCATION = objectives
 
     def pretrain(self, sess, generator, train_discriminator):
         # samples = generate_samples(sess, BATCH_SIZE, generated_num)
@@ -281,7 +283,7 @@ class ChemORGAN(object):
 
         else:
 
-            reward_func = mm.load_reward(self.education[nbatch])
+            reward_func = mm.load_reward(self.EDUCATION[nbatch])
 
             def batch_reward(samples):
                 decoded = [mm.decode(sample, self.ord_dict)

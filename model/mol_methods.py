@@ -5,6 +5,7 @@ import numpy as np
 import custom_metrics as cm
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import MolFromSmiles, MolToSmiles
+from collections import OrderedDict
 
 
 def read_smi(filename):
