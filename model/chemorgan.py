@@ -48,6 +48,7 @@ class ChemORGAN(object):
             raise ValueError('No parameters were specified.')
 
         self.set_hyperparameters()
+        self.set_parameters()
         self.set_training_program()
         print('setup training programm')
         self.gen_loader = Gen_Dataloader(self.BATCH_SIZE)

@@ -18,6 +18,7 @@ from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 from copy import deepcopy
 from math import exp, log
 from collections import OrderedDict
+
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
 
@@ -893,3 +894,36 @@ def batch_mp(smiles, train_smiles=None):
 #
 #
 #
+
+def get_metrics():
+    metrics = OrderedDict()
+    metrics['validity'] = batch_validity
+    metrics['novelty'] = batch_novelty
+    metrics['creativity'] = batch_creativity
+    metrics['hard_novelty'] = batch_hardnovelty
+    metrics['soft_novelty'] = batch_softnovelty
+    metrics['diversity'] = batch_diversity
+    metrics['variety'] = batch_variety
+    metrics['symmetry'] = batch_symmetry
+    metrics['conciseness'] = batch_conciseness
+    metrics['solubility'] = batch_solubility
+    metrics['naturalness'] = batch_NPLikeliness
+    metrics['synthesizability'] = batch_SA
+    metrics['lipinski'] = batch_lipinski
+    metrics['drug_candidate'] = batch_drugcandidate
+   # metrics['pce'] = batch_PCE
+   # metrics['bandgap'] = batch_bandgap
+   # metrics['substructure_match'] = batch_substructure_match
+    metrics['chemical_beauty'] = batch_beauty
+    return metrics
+
+
+def load_reward(objective):
+
+    metrics = get_metrics()
+
+    if objective in metrics.keys():
+        return metrics[objective]
+    else:
+        raise ValueError('objective {} not found!'.format(objective))
+    return

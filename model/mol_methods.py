@@ -6,7 +6,7 @@ import custom_metrics as cm
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import MolFromSmiles, MolToSmiles
 from collections import OrderedDict
-
+from custom_metrics import load_reward
 
 def read_smi(filename):
     """
@@ -262,36 +262,3 @@ def print_results(verified_samples, unverified_samples, results={}):
     print('~~~~~~~~~~~~~~~~~~~~~~~')
     return
 
-
-def get_metrics():
-    metrics = OrderedDict()
-    metrics['validity'] = cm.batch_validity
-    metrics['novelty'] = cm.batch_novelty
-    metrics['creativity'] = cm.batch_creativity
-    metrics['hard_novelty'] = cm.batch_hardnovelty
-    metrics['soft_novelty'] = cm.batch_softnovelty
-    metrics['diversity'] = cm.batch_diversity
-    metrics['variety'] = cm.batch_variety
-    metrics['symmetry'] = cm.batch_symmetry
-    metrics['conciseness'] = cm.batch_conciseness
-    metrics['solubility'] = cm.batch_solubility
-    metrics['naturalness'] = cm.batch_NPLikeliness
-    metrics['synthesizability'] = cm.batch_SA
-    metrics['lipinski'] = cm.batch_lipinski
-    metrics['drug_candidate'] = cm.batch_drugcandidate
-   # metrics['pce'] = cm.batch_PCE
-   # metrics['bandgap'] = cm.batch_bandgap
-   # metrics['substructure_match'] = cm.batch_substructure_match
-    metrics['chemical_beauty'] = cm.batch_beauty
-    return metrics
-
-
-def load_reward(objective):
-
-    metrics = get_metrics()
-
-    if objective in metrics.keys():
-        return metrics[objective]
-    else:
-        raise ValueError('objective {} not found!'.format(objective))
-    return
