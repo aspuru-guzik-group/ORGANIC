@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
-from tensorflow.contrib import legacy_seq2seq
 import numpy as np
 
 
