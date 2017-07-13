@@ -6,10 +6,10 @@ from keras.layers.normalization import BatchNormalization
 from keras.callbacks import EarlyStopping
 from keras_tqdm import TQDMCallback
 
+
 class NN(object):
 
     def predict(self, smiles, batch_size=1000):
-
         """
         Computes the predictions for a batch of molecules.
 
@@ -24,12 +24,10 @@ class NN(object):
 
         """
 
-
         input_x = self.computeFingerprints(smiles)
         return self.nn.predict(input_x, batch_size=batch_size)
 
     def evaluate(self, train_x, train_y):
-
         """
         Evaluates the accuracy of the method.
 
@@ -50,7 +48,6 @@ class NN(object):
         return self.nn.evaluate(input_x, train_y, verbose=0)
 
     def train(self, train_x, train_y, batch_size, nepochs):
-
         """
         Trains the model.
 
@@ -73,36 +70,32 @@ class NN(object):
 
         """
 
-
         input_x = self.computeFingerprints(train_x)
         callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.01, patience=10, verbose=0, mode='auto'),
-            TQDMCallback()]
+                     TQDMCallback()]
         history = self.nn.fit(input_x, train_y,
-            shuffle=True,
-            epochs=nepochs,
-            batch_size=batch_size,
-            validation_split=0.1,
-            verbose=2,
-            callbacks=callbacks)
+                              shuffle=True,
+                              epochs=nepochs,
+                              batch_size=batch_size,
+                              validation_split=0.1,
+                              verbose=2,
+                              callbacks=callbacks)
 
         return history
 
     def load(self, file):
-
         """
         Loads a previously trained model.
 
-        Arguments.
+        Arguments.d
 
             - file. A string pointing to the .h5 file.
 
         """
 
-
         self.nn.load_weights(file, by_name=True)
 
     def computeFingerprints(self, smiles):
-
         """
         Computes Morgan fingerprints 
 
@@ -119,12 +112,12 @@ class NN(object):
         """
 
         mols = [Chem.MolFromSmiles(smile) for smile in smiles]
-        fps = [self.fingerprintToBitVect(Chem.GetMorganFingerprintAsBitVect(mol, 12, nBits=self.nBits)) for mol in mols]
+        fps = [self.fingerprintToBitVect(Chem.GetMorganFingerprintAsBitVect(
+            mol, 12, nBits=self.nBits)) for mol in mols]
         return np.asarray(fps)
 
     def fingerprintToBitVect(self, fp):
         return [float(i) for i in fp]
-
 
 
 class CustomNN(NN):
@@ -150,7 +143,6 @@ class CustomNN(NN):
         self.nn = self.model(self.nBits)
 
     def model(self, dim):
-
         """
         Generates a Keras DNN architecture.
 
@@ -166,7 +158,7 @@ class CustomNN(NN):
         """
 
         model = Sequential()
-        model.add(Dropout(0.2,input_shape=(4096,)))
+        model.add(Dropout(0.2, input_shape=(4096,)))
         model.add(BatchNormalization())
         model.add(Dense(300, activation='relu', kernel_initializer='normal'))
         model.add(Dense(300, activation='relu', kernel_initializer='normal'))
@@ -174,5 +166,3 @@ class CustomNN(NN):
         model.compile(optimizer='adam', loss='mse')
 
         return model
-
-

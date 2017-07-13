@@ -8,7 +8,6 @@ from rdkit.Chem import MolFromSmiles, MolToSmiles
 
 
 def read_smi(filename):
-
     """
     Function to read a .smi file.
 
@@ -173,6 +172,7 @@ def encode(smile, max_len, char_dict): return [
 def decode(ords, ord_dict): return unpad(
     ''.join([ord_dict[o] for o in ords]))
 
+
 def print_params(p):
     print('Using parameters:')
     if (type(p['TOTAL_BATCH']) is list) or (type(p['OBJECTIVE']) is list):
@@ -260,6 +260,7 @@ def print_results(verified_samples, unverified_samples, results={}):
 
     print('~~~~~~~~~~~~~~~~~~~~~~~')
     return
+
 
 def get_metrics():
     metrics = OrderedDict()
