@@ -12,6 +12,7 @@ import mol_methods as mm
 import json
 from data_loaders import Gen_Dataloader, Dis_Dataloader
 from discriminator import Discriminator
+from custom_metrics import get_metrics
 import pandas as pd
 from tqdm import tqdm
 __version__ = '0.2.1'
@@ -268,7 +269,7 @@ class ChemORGAN(object):
 
         if self.TRAINING_PROGRAM == False:
 
-            reward_func = mm.load_reward(self.OBJECTIVE)
+            reward_func = self.load_reward(self.OBJECTIVE)
 
             def batch_reward(samples):
                 decoded = [mm.decode(sample, self.ord_dict)
@@ -284,7 +285,7 @@ class ChemORGAN(object):
 
         else:
 
-            reward_func = mm.load_reward(self.EDUCATION[nbatch])
+            reward_func = self.load_reward(self.EDUCATION[nbatch])
 
             def batch_reward(samples):
                 decoded = [mm.decode(sample, self.ord_dict)
@@ -328,6 +329,17 @@ class ChemORGAN(object):
         path = model_saver.save(sess, ckpt_file)
         print('Model saved at {}'.format(path))
         return
+
+    def load_reward(self, objective):
+
+        metrics = get_metrics()
+
+        if objective in metrics.keys():
+            return metrics[objective]
+        else:
+            raise ValueError('objective {} not found!'.format(objective))
+        return
+
 
     def load_prev(self):
 

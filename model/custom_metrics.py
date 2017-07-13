@@ -9,7 +9,6 @@ import math
 import random
 import pymatgen as mg
 import rdkit
-from mol_methods import *
 from rdkit import rdBase
 from rdkit import DataStructs
 from rdkit.Chem import AllChem as Chem
@@ -18,6 +17,8 @@ from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 from copy import deepcopy
 from math import exp, log
 from collections import OrderedDict
+from mol_methods import *
+
 
 # Disables logs for Smiles conversion
 rdBase.DisableLog('rdApp.error')
@@ -916,14 +917,3 @@ def get_metrics():
    # metrics['substructure_match'] = batch_substructure_match
     metrics['chemical_beauty'] = batch_beauty
     return metrics
-
-
-def load_reward(objective):
-
-    metrics = get_metrics()
-
-    if objective in metrics.keys():
-        return metrics[objective]
-    else:
-        raise ValueError('objective {} not found!'.format(objective))
-    return
