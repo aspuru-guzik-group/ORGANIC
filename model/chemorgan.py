@@ -358,7 +358,6 @@ class ChemORGAN(object):
             path = saver.save(self.sess, ckpt_file)
             print('Pretrain finished and saved at {}'.format(path))
 
-
     def train(self):
 
         print('#########################################################################')
@@ -417,6 +416,5 @@ class ChemORGAN(object):
 if __name__ == '__main__':
 
     model = ChemORGAN()
-
-    # model.load_prev()
-    # model.train()
+    model.load_prev()
+    model.train()
