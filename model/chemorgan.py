@@ -340,8 +340,7 @@ class ChemORGAN(object):
             raise ValueError('objective {} not found!'.format(objective))
         return
 
-
-    def load_prev(self):
+    def load_prev_pretraining(self):
 
         # Loading previous checkpoints
         saver = tf.train.Saver()
@@ -363,7 +362,10 @@ class ChemORGAN(object):
             else:
                 print('\t* LOAD_PRETRAIN was set to false.')
 
-        self.rollout = Rollout(self.generator, 0.8)
+    def load_prev_training(self):
+
+        if not self.rollout:
+            self.rollout = Rollout(self.generator, 0.8)
 
         if self.params['LOAD_PREV_SESS']:
             saver = tf.train.Saver()
@@ -388,27 +390,31 @@ class ChemORGAN(object):
 
     def train(self):
 
+        if not self.rollout:
+            self.rollout = Rollout(self.generator, 0.8)
+
         print('#########################################################################')
         print('Start Reinforcement Training Generator...')
         results_rows = []
         for nbatch in tqdm(range(self.TOTAL_BATCH)):
+
             results = OrderedDict({'exp_name': self.PREFIX})
             batch_reward = self.make_reward(self.train_samples, nbatch)
-            if nbatch % 1 == 0 or nbatch == self.TOTAL_BATCH - 1:
-                print('* Making samples')
-                if nbatch % 10 == 0:
-                    gen_samples = self.generate_samples(
-                        self.sess, self.generator, self.BATCH_SIZE, self.BIG_SAMPLE_NUM)
-                else:
-                    gen_samples = self.generate_samples(
-                        self.sess, self.generator, self.BATCH_SIZE, self.SAMPLE_NUM)
-                self.gen_loader.create_batches(gen_samples)
-                print('batch_num: {}'.format(nbatch))
-                results['Batch'] = nbatch
 
-                # results
-                mm.compute_results(
-                    gen_samples, self.train_samples, self.ord_dict, results)
+            print('* Making samples')
+            if nbatch % 10 == 0:
+                gen_samples = self.generate_samples(
+                    self.sess, self.generator, self.BATCH_SIZE, self.BIG_SAMPLE_NUM)
+            else:
+                gen_samples = self.generate_samples(
+                    self.sess, self.generator, self.BATCH_SIZE, self.SAMPLE_NUM)
+            self.gen_loader.create_batches(gen_samples)
+            print('batch_num: {}'.format(nbatch))
+            results['Batch'] = nbatch
+
+            # results
+            mm.compute_results(
+                gen_samples, self.train_samples, self.ord_dict, results)
 
             print(
                 '#########################################################################')
