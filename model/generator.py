@@ -7,7 +7,7 @@ class Generator(object):
 
     def __init__(self, num_emb, batch_size, emb_dim, hidden_dim,
                  sequence_length, start_token,
-                 learning_rate=0.01, reward_gamma=0.95):
+                 learning_rate=0.002, reward_gamma=0.95):
 
         self.num_emb = num_emb
         self.batch_size = batch_size
@@ -252,15 +252,15 @@ class Generator(object):
         return unit
 
     def g_optimizer(self, *args, **kwargs):
-        # return tf.train.GradientDescentOptimizer(*args, **kwargs)
-        #
-        return tf.train.AdamOptimizer(0.002)  # ignore learning rate
+        return tf.train.AdamOptimizer(*args, **kwargs)  # ignore learning rate
 
 
 class Rollout(object):
-    def __init__(self, lstm, update_rate):
+
+    def __init__(self, lstm, update_rate, pad_num):
         self.lstm = lstm
         self.update_rate = update_rate
+        self.pad_num = pad_num
 
         self.num_emb = self.lstm.num_emb
         self.batch_size = self.lstm.batch_size
@@ -342,7 +342,9 @@ class Rollout(object):
         reward_weight = 1 - D_weight
         rewards = []
         for i in range(rollout_num):
+
             for given_num in range(1, self.sequence_length):
+
                 feed = {self.x: input_x, self.given_num: given_num}
                 outputs = sess.run([self.gen_x], feed)
                 generated_seqs = outputs[0]  # batch_size x seq_length
@@ -361,6 +363,7 @@ class Rollout(object):
                     rewards.append(ypred)
                 else:
                     rewards[given_num - 1] += ypred
+
 
             # the last char reward
             feed = {cnn.input_x: input_x, cnn.dropout_keep_prob: 1.0}

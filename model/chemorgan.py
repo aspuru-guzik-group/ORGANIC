@@ -51,6 +51,9 @@ class ChemORGAN(object):
         self.set_hyperparameters()
         self.set_parameters()
         self.set_training_program()
+        self.pretrain_is_loaded = False
+        self.sess_is_loaded = False
+
         print('setup training programm')
         self.gen_loader = Gen_Dataloader(self.BATCH_SIZE)
         self.dis_loader = Dis_Dataloader()
@@ -244,6 +247,8 @@ class ChemORGAN(object):
         self.train_samples = mm.load_train_data(self.params['TRAIN_FILE'])
         self.char_dict, self.ord_dict = mm.build_vocab(self.train_samples)
         self.NUM_EMB = len(self.char_dict)
+        self.PAD_CHAR = self.ord_dict[self.NUM_EMB-1]
+        self.PAD_NUM = self.char_dict[self.PAD_CHAR]
         self.DATA_LENGTH = max(map(len, self.train_samples))
         self.MAX_LENGTH = self.params["MAX_LENGTH"]
         to_use = [sample for sample in self.train_samples if mm.verified_and_below(
@@ -344,8 +349,6 @@ class ChemORGAN(object):
 
         # Loading previous checkpoints
         saver = tf.train.Saver()
-        pretrain_is_loaded = False
-        sess_is_loaded = False
 
         ckpt_dir = 'checkpoints/{}_pretrain'.format(self.PREFIX)
         if not os.path.exists(ckpt_dir):
@@ -354,7 +357,7 @@ class ChemORGAN(object):
         if os.path.isfile(ckpt_file + '.meta') and self.params["LOAD_PRETRAIN"]:
             saver.restore(self.sess, ckpt_file)
             print('Pretrain loaded from previous checkpoint {}'.format(ckpt_file))
-            pretrain_is_loaded = True
+            self.pretrain_is_loaded = True
         else:
             if self.params["LOAD_PRETRAIN"]:
                 print(
@@ -364,8 +367,8 @@ class ChemORGAN(object):
 
     def load_prev_training(self):
 
-        if not self.rollout:
-            self.rollout = Rollout(self.generator, 0.8)
+        if not hasattr(self, 'rollout'):
+            self.rollout = Rollout(self.generator, 0.8, self.PAD_NUM)
 
         if self.params['LOAD_PREV_SESS']:
             saver = tf.train.Saver()
@@ -376,22 +379,33 @@ class ChemORGAN(object):
             if os.path.isfile(ckpt_file + '.meta'):
                 saver.restore(self.sess, ckpt_file)
                 print('Training loaded from previous checkpoint {}'.format(ckpt_file))
-                sess_is_loaded = True
+                self.sess_is_loaded = True
             else:
                 print('\t* No training data found as {:s}.'.format(ckpt_file))
         else:
             print('\t* LOAD_PREV_SESS was set to false.')
 
-        if not pretrain_is_loaded and not sess_is_loaded:
             self.sess.run(tf.global_variables_initializer())
             self.pretrain(self.sess, self.generator, self.train_discriminator)
             path = saver.save(self.sess, ckpt_file)
             print('Pretrain finished and saved at {}'.format(path))
 
+
     def train(self):
 
-        if not self.rollout:
-            self.rollout = Rollout(self.generator, 0.8)
+        if not self.pretrain_is_loaded and not self.sess_is_loaded:
+            self.sess.run(tf.global_variables_initializer())
+            self.pretrain(self.sess, self.generator, self.train_discriminator)
+            ckpt_dir = 'checkpoints/{}_pretrain'.format(self.PREFIX)
+            if not os.path.exists(ckpt_dir):
+                os.makedirs(ckpt_dir)
+            ckpt_file = os.path.join(ckpt_dir, 'pretrain_ckpt')
+            saver = tf.Saver()
+            path = saver.save(self.sess, ckpt_file)
+            print('Pretrain finished and saved at {}'.format(path))
+
+        if not hasattr(self, 'rollout'):
+            self.rollout = Rollout(self.generator, 0.8, self.PAD_NUM)
 
         print('#########################################################################')
         print('Start Reinforcement Training Generator...')
@@ -455,5 +469,5 @@ class ChemORGAN(object):
 if __name__ == '__main__':
 
     model = ChemORGAN()
-    model.load_prev()
+    model.load_prev_training()
     model.train()
