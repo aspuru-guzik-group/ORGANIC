@@ -1,7 +1,7 @@
 import tensorflow as tf
-from tensorflow.python.ops import tensor_array_ops, control_flow_ops
 import numpy as np
-
+from copy import deepcopy
+from tensorflow.python.ops import tensor_array_ops, control_flow_ops
 
 class Generator(object):
 
@@ -339,31 +339,46 @@ class Rollout(object):
         self.gen_x = tf.transpose(self.gen_x, perm=[1, 0])
 
     def get_reward(self, sess, input_x, rollout_num, cnn, reward_fn=None, D_weight=1):
+
         reward_weight = 1 - D_weight
         rewards = []
         for i in range(rollout_num):
 
+            already = []
             for given_num in range(1, self.sequence_length):
-
                 feed = {self.x: input_x, self.given_num: given_num}
                 outputs = sess.run([self.gen_x], feed)
                 generated_seqs = outputs[0]  # batch_size x seq_length
                 feed = {cnn.input_x: generated_seqs,
                         cnn.dropout_keep_prob: 1.0}
+                gind = np.array(range(len(generated_seqs)))
                 ypred_for_auc = sess.run(cnn.ypred_for_auc, feed)
 
+                ypred = np.array([item[1] for item in ypred_for_auc])
+
                 if reward_fn:
-                    ypred = D_weight * \
-                        np.array([item[1] for item in ypred_for_auc])
-                    ypred += reward_weight * reward_fn(generated_seqs)
-                else:
-                    ypred = np.array([item[1] for item in ypred_for_auc])
+
+                    ypred = D_weight * ypred
+                    for k, r in already:
+
+                        generated_seqs = np.delete(generated_seqs, k, 0)
+                        gind = np.delete(gind, k, 0)
+                        ypred[k] += reward_weight * r
+
+                    if generated_seqs.size:
+                        rew = reward_fn(generated_seqs)
+
+                    for k, r in zip(gind, rew):
+                        ypred[k] += reward_weight * r
+
+                    for j, k in enumerate(gind):
+                        if input_x[k][given_num] == self.pad_num and input_x[k][given_num-1] == self.pad_num:
+                            already.append((k, rew[j]))
 
                 if i == 0:
                     rewards.append(ypred)
                 else:
-                    rewards[given_num - 1] += ypred
-
+                    rewards[given_num - 1] += ypred                
 
             # the last char reward
             feed = {cnn.input_x: input_x, cnn.dropout_keep_prob: 1.0}
