@@ -379,7 +379,6 @@ class Rollout(object):
                         if input_x[k][given_num] == self.pad_num and input_x[k][given_num-1] == self.pad_num:
                             already.append((k, rew[j]))
                     already = sorted(already, key=lambda el: el[0])
-                    print(already)
 
                 if i == 0:
                     rewards.append(ypred)
