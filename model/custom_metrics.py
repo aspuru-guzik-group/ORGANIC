@@ -2,14 +2,12 @@ from __future__ import absolute_import, division, print_function
 from builtins import range
 import os
 import numpy as np
-import time
 import pickle
 import gzip
 import math
 import random
 import pymatgen as mg
 import rdkit
-from rdkit import rdBase
 from rdkit import DataStructs
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import Crippen, MolFromSmiles, Descriptors
@@ -19,57 +17,6 @@ from math import exp, log
 from collections import OrderedDict
 from mol_methods import *
 
-
-# Disables logs for Smiles conversion
-rdBase.DisableLog('rdApp.error')
-
-MOD_PATH = os.path.dirname(os.path.realpath(__file__))
-print(MOD_PATH)
-
-
-def readNPModel(filename=None):
-    print("mol_metrics: reading NP model ...", end=' ')
-    if filename is None:
-        filename = os.path.join(MOD_PATH, 'NP_score.pkl.gz')
-    start = time.time()
-    NP_model = pickle.load(gzip.open(filename))
-    end = time.time()
-    print("loaded in {}".format(end - start))
-    return NP_model
-
-
-def readSubstructuresFile(filename, label='positive'):
-    if os.path.exists(filename):
-        smiles = read_smi(filename)
-        print("mol_metrics: reading {} substructures from {} ...".format(
-            len(smiles), label))
-        patterns = [Chem.MolFromSmarts(s) for s in smiles]
-    else:
-        print('\tno substurctures file found, if using substructure scoring save smiles/smarts in {}smi'.format(label))
-        patterns = None
-    return patterns
-
-
-def readSAModel(filename=None):
-    print("mol_metrics: reading SA model ...", end=' ')
-    if filename is None:
-        filename = os.path.join(MOD_PATH, 'SA_score.pkl.gz')
-    start = time.time()
-    model_data = pickle.load(gzip.open(filename))
-    outDict = {}
-    for i in model_data:
-        for j in range(1, len(i)):
-            outDict[i[j]] = float(i[0])
-    SA_model = outDict
-    end = time.time()
-    print("loaded in {}".format(end - start))
-    return SA_model
-
-SA_model = readSAModel()
-NP_model = readNPModel()
-ALL_POS_PATTS = readSubstructuresFile('all_positive.smi', 'all_positive')
-ANY_POS_PATTS = readSubstructuresFile('any_positive.smi', 'any_positive')
-ALL_NEG_PATTS = readSubstructuresFile('all_negative.smi', 'all_negative')
 
 NORMALIZE = False
 #__all__ = ['weights_max', 'weights_mean', 'weights_none', 'default']
@@ -304,7 +251,6 @@ def batch_diversity(smiles, train_smiles):
     vals = [apply_to_valid(s, diversity, fps=fps) for s in smiles]
     return vals
 
-
 def diversity(mol, fps):
     low_rand_dst = 0.9
     mean_div_dst = 0.945
@@ -518,12 +464,25 @@ Journal of cheminformatics, 1(1), 8.
 """
 
 
-def batch_SA(smiles, train_smiles=None):
-    vals = [apply_to_valid(s, SA_score) for s in smiles]
+def batch_SA(smiles, train_smiles=None, SA_model=None):
+    vals = [apply_to_valid(s, SA_score, SA_model=SA_model) for s in smiles]
     return vals
 
+def load_SA(filename=None):
+    if filename is None:
+        filename = os.path.join(MOD_PATH, 'SA_score.pkl.gz')
+    model_data = pickle.load(gzip.open(filename))
+    outDict = {}
+    for i in model_data:
+        for j in range(1, len(i)):
+            outDict[i[j]] = float(i[0])
+    SA_model = outDict
+    return ('SA_model', SA_model)
 
-def SA_score(mol):
+def SA_score(mol, SA_model):
+
+    if SA_model is None:
+        raise ValueError("Synthesizability metric was not properly loaded.")
     # fragment score
     fp = Chem.GetMorganFingerprint(mol, 2)
     fps = fp.GetNonzeroElements()
@@ -661,10 +620,15 @@ a natural product.
 """
 
 
-def batch_NPLikeliness(smiles, train_smiles=None):
-    vals = [apply_to_valid(s, NP_score) for s in smiles]
+def batch_NPLikeliness(smiles, train_smiles=None, NP_model=None):
+    vals = [apply_to_valid(s, NP_score, NP_model=NP_model) for s in smiles]
     return vals
 
+def load_NP(filename=None):
+    if filename is None:
+        filename = os.path.join(MOD_PATH, 'NP_score.pkl.gz')
+    NP_model = pickle.load(gzip.open(filename))
+    return ('NP_model', NP_model)
 
 def NP_score(mol):
     fp = Chem.GetMorganFingerprint(mol, 2)
@@ -728,43 +692,54 @@ This metric assigns 1.0 if a previously defined substructure (through the global
 variable obj_substructure) is present in a given molecule, and 0.0 if not.
 """
 
-
-def batch_substructure_match_all(smiles, train_smiles=None):
+def batch_substructure_match_all(smiles, train_smiles=None, ALL_POS_PATTS=None):
     if ALL_POS_PATTS == None:
-        print('No substructures has been specified')
-        raise
+        raise ValueError('No substructures has been specified')
 
-    vals = [apply_to_valid(s, substructure_match_all) for s in smiles]
+    vals = [apply_to_valid(s, substructure_match_all, ALL_POS_PATTS=ALL_POS_PATTS) for s in smiles]
     return vals
 
+def load_substructure_match_all():
+    ALL_POS_PATTS = readSubstructuresFile('all_positive.smi', 'all_positive')
+    return ('ALL_POS_PATTS', ALL_POS_PATTS)
+
+def batch_substructure_match_any(smiles, train_smiles=None, ANY_POS_PATTS=None):
+    if ANY_POS_PATTS == None:
+        raise ValueError('No substructures has been specified')
+
+    vals = [apply_to_valid(s, substructure_match_any, ANY_POS_PATTS=ANY_POS_PATTS) for s in smiles]
+    return vals
+
+def load_substructure_match_any():
+    ANY_POS_PATTS = readSubstructuresFile('any_positive.smi', 'any_positive')
+    return ('ANY_POS_PATTS', ANY_POS_PATTS)
+
+def batch_substructure_absence(smiles, train_smiles=None, ALL_NEG_PATTS=None):
+    if ALL_NEG_PATTS == None:
+        raise ValueError('No substructures has been specified')
+
+    vals = [apply_to_valid(s, substructure_match_any, ALL_NEG_PATTS=ALL_NEG_PATTS) for s in smiles]
+    return vals
+
+def load_substructure_absence():
+    ALL_NEG_PATTS = readSubstructuresFile('all_negative.smi', 'all_negative')
+    return ('ALL_NEG_PATTS', ALL_NEG_PATTS)
+
+def readSubstructuresFile(filename, label='positive'):
+    if os.path.exists(filename):
+        smiles = read_smi(filename)
+        patterns = [Chem.MolFromSmarts(s) for s in smiles]
+    else:
+        patterns = None
+    return patterns
 
 def substructure_match_all(mol, train_smiles=None):
     val = all([mol.HasSubstructMatch(patt) for patt in ALL_POS_PATTS])
     return int(val)
 
-
-def batch_substructure_match_any(smiles, train_smiles=None):
-    if ANY_POS_PATTS == None:
-        print('No substructures has been specified')
-        raise
-
-    vals = [apply_to_valid(s, substructure_match_any) for s in smiles]
-    return vals
-
-
 def substructure_match_any(mol, train_smiles=None):
     val = any([mol.HasSubstructMatch(patt) for patt in ANY_POS_PATTS])
     return int(val)
-
-
-def batch_substructure_absence(smiles, train_smiles=None):
-    if ALL_NEG_PATTS == None:
-        print('No substructures has been specified')
-        raise
-
-    vals = [apply_to_valid(s, substructure_match_any) for s in smiles]
-    return vals
-
 
 def substructure_absence(mol, train_smiles=None):
     val = all([not mol.HasSubstructMatch(patt) for patt in ANY_NEG_PATTS])
@@ -871,21 +846,6 @@ def batch_mp(smiles, train_smiles=None):
             else 0.0 for smile in smiles]
     return remap(vals, np.amin(vals), np.amax(vals))
 
-#
-# 2.19. Melting point
-#
-
-"""
-This metric computes the mutagenicity of a given  molecule, using a 
-CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
-"""
-
-
-def batch_mp(smiles, train_smiles=None):
-    cnn = cnn_mp(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile)
-            else 0.0 for smile in smiles]
-    return remap(vals, np.amin(vals), np.amax(vals))
 
 ############################################
 #
@@ -896,7 +856,37 @@ def batch_mp(smiles, train_smiles=None):
 #
 #
 
+def metrics_loading():
+
+    global MOD_PATH
+    MOD_PATH = os.path.dirname(os.path.realpath(__file__))
+
+    load = OrderedDict()
+    load['validity'] = lambda *args: None
+    load['diversity'] = lambda *args: None
+    load['variety'] = lambda *args: None
+    load['novelty'] = lambda *args: None
+    load['hard_novelty'] = lambda *args: None
+    load['soft_novelty'] = lambda *args: None
+    load['creativity'] = lambda *args: None
+    load['symmetry'] = lambda *args: None
+    load['solubility'] = lambda *args: None
+    load['conciseness'] = lambda *args: None
+    load['synthesizability'] = load_SA
+    load['drug_candidate'] = load_SA
+    load['lipinski'] = lambda *args: None
+    load['naturalness'] = load_NP
+    # load['pce'] = load_PCE
+    # load['bandgap'] = load_bandgap
+    load['substructure_match_all'] = load_substructure_match_all
+    load['substructure_match_any'] = load_substructure_match_any
+    load['substructure_absence'] = load_substructure_absence
+    load['chemical_beauty'] = lambda *args: None
+
+    return load
+
 def get_metrics():
+
     metrics = OrderedDict()
     metrics['validity'] = batch_validity
     metrics['novelty'] = batch_novelty
@@ -915,5 +905,9 @@ def get_metrics():
    # metrics['pce'] = batch_PCE
    # metrics['bandgap'] = batch_bandgap
    # metrics['substructure_match'] = batch_substructure_match
+    metrics['substructure_match_all'] = batch_substructure_match_all
+    metrics['substructure_match_any'] = batch_substructure_match_any
+    metrics['substructure_absence'] = batch_substructure_absence
     metrics['chemical_beauty'] = batch_beauty
+
     return metrics
