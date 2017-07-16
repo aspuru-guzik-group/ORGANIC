@@ -9,7 +9,7 @@ from keras_tqdm import TQDMCallback
 
 class NN(object):
 
-    def predict(self, smiles, batch_size=1000):
+    def predict(self, smiles, batch_size=100):
         """
         Computes the predictions for a batch of molecules.
 

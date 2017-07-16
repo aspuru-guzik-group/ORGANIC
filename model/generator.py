@@ -358,7 +358,6 @@ class Rollout(object):
                 if reward_fn:
 
                     ypred = D_weight * ypred
-
                     # Delete sequences that are already finished,
                     # and add their rewards
                     for k, r in reversed(already):

@@ -1,24 +1,24 @@
 {
-    "EXP_NAME":"metrics",
-    "TRAIN_FILE":"../data/toy.csv",
+    "EXP_NAME":"metrics_unq_validity",
+    "TRAIN_FILE":"smallmols_sub.smi",
+    "METRICS_FILE":"mol_metrics",
     "LAMBDA" : 0.5,
-    "CHK_PATH" : "checkpoints",
-    "G_STEPS" : 1,
+    "CHK_PATH" : "/n/home02/couteiral/jobs/ChemORGAN/checkpoints",
+    "G_STEPS" : 2,
     "SEED":88,
-    "G_PRETRAIN_STEPS":2,
-    "D_PRETRAIN_STEPS":2,
-    "MAX_LENGTH":40,
-    "BATCH_SIZE":1,
+    "G_PRETRAIN_STEPS":240,
+    "D_PRETRAIN_STEPS":50,
+    "MAX_LENGTH":100,
+    "BATCH_SIZE":64,
     "LOAD_PRETRAIN":true,
     "LOAD_PREV_SESS":true,
-    "PREV_CKPT":"metrics_model_final.ckpt",
-    "EPOCH_SAVES":2,
+    "EPOCH_SAVES":20,
     "OBJECTIVE":
     [
         "validity"
     ],
     "TOTAL_BATCH":
     [
-        1
+        200
     ]
 }

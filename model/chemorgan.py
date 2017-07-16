@@ -3,6 +3,7 @@ from gpu_utils import pick_gpus_lowest_memory
 from builtins import range
 from collections import OrderedDict
 import os
+os.environ['KERAS_BACKEND'] = 'theano'
 from generator import Generator, Rollout
 import numpy as np
 import tensorflow as tf
@@ -16,7 +17,7 @@ from custom_metrics import get_metrics, metrics_loading
 from rdkit import rdBase
 import pandas as pd
 from tqdm import tqdm
-__version__ = '0.2.1'
+__version__ = '0.3.0'
 
 __logo__ = """
 //////////////////////////////////////////////////////////////////
@@ -38,8 +39,8 @@ class ChemORGAN(object):
         rdBase.DisableLog('rdApp.error')
         print(__logo__.format(__version__))
         self.detect_gpu()
-        self.set_default()
         self.PREFIX = name
+        self.set_default()
 
         if read_file == True:
             self.params = json.loads(
@@ -80,6 +81,8 @@ class ChemORGAN(object):
         self.SEED = None
         self.DIS_BATCH_SIZE = 64
         self.DIS_EPOCHS = 3
+        self.EPOCH_SAVES = 20
+        self.CHK_PATH = os.path.join(os.getcwd(), 'checkpoints/{}'.format(self.PREFIX))
 
         # Generator hyperparameters
         self.GEN_EMB_DIM = 32
@@ -115,6 +118,10 @@ class ChemORGAN(object):
             self.DIS_BATCH_SIZE = self.params['DIS_BATCH_SIZE']
         if 'DIS_EPOCHS' in self.params:
             self.DIS_EPOCHS = self.params['DIS_EPOCHS']
+        if 'EPOCH_SAVES' in self.params:
+            self.EPOCH_SAVES = self.params['EPOCH_SAVES']
+        if 'CHK_PATH' in self.params:
+            self.CHK_PATH = self.params['CHK_PATH']
 
         # Generator hyperparameters
         if 'GEN_EMB_DIM' in self.params:
@@ -219,17 +226,33 @@ class ChemORGAN(object):
         metric = self.EDUCATION[nbatch] 
         reward_func = self.load_reward(metric)
 
-        def batch_reward(samples):
-            decoded = [mm.decode(sample, self.ord_dict)
-                       for sample in samples]
-            pct_unique = len(list(set(decoded))) / float(len(decoded))
-            rewards = reward_func(decoded, train_samples, **self.kwargs[metric])
-            weights = np.array([pct_unique / float(decoded.count(sample))
-                                for sample in decoded])
+        if self.kwargs[metric] is not None:
 
-            return rewards * weights
+            def batch_reward(samples):
+                decoded = [mm.decode(sample, self.ord_dict)
+                           for sample in samples]
+                pct_unique = len(list(set(decoded))) / float(len(decoded))
+                rewards = reward_func(decoded, train_samples, **self.kwargs[metric])
+                weights = np.array([pct_unique / float(decoded.count(sample))
+                                    for sample in decoded])
 
-        return batch_reward
+                return rewards * weights
+
+            return batch_reward
+        else:
+
+            def batch_reward(samples):
+                decoded = [mm.decode(sample, self.ord_dict)
+                           for sample in samples]
+                pct_unique = len(list(set(decoded))) / float(len(decoded))
+                rewards = reward_func(decoded, train_samples)
+                weights = np.array([pct_unique / float(decoded.count(sample))
+                                    for sample in decoded])
+
+                return rewards * weights
+
+            return batch_reward
+
 
     def load_reward(self, objective):
 
@@ -252,13 +275,15 @@ class ChemORGAN(object):
             load_fun = loadings[m]
             args = load_fun()
             if args is not None:
-                fun_args = {}
-                for arg in args:
-                    fun_args[arg[0]] = arg[1]
-                self.kwargs[m] = fun_args
+                if isinstance(args, tuple):
+                    self.kwargs[m] = {args[0]: args[1]}
+                elif isinstance(args, list):
+                    fun_args = {}
+                    for arg in args:
+                        fun_args[arg[0]] = arg[1]
+                    self.kwargs[m] = fun_args
             else: 
                 self.kwargs[m] = None
-
         return 
 
     def load_prev_pretraining(self, ckpt_dir=None):
@@ -361,7 +386,7 @@ class ChemORGAN(object):
 
         # save models
         model_saver = tf.train.Saver()
-        ckpt_dir = os.path.join(self.params['CHK_PATH'], folder)
+        ckpt_dir = os.path.join(self.CHK_PATH, folder)
         if not os.path.exists(ckpt_dir):
             os.makedirs(ckpt_dir)
         ckpt_file = os.path.join(
@@ -473,7 +498,7 @@ class ChemORGAN(object):
                 results['Accuracy_{}'.format(i)] = accuracy
             print('results')
             results_rows.append(results)
-            if nbatch % self.params["EPOCH_SAVES"] == 0:
+            if nbatch % self.EPOCH_SAVES == 0:
                 self.save_results(self.sess, self.PREFIX,
                                   self.PREFIX + '_model', results_rows, nbatch)
 
@@ -485,9 +510,9 @@ class ChemORGAN(object):
 
 if __name__ == '__main__':
 
-    model = ChemORGAN('load_test')
+    model = ChemORGAN('load_test', params={'PRETRAIN_GEN_EPOCHS': 1, 'PRETRAIN_DIS_EPOCHS': 1})
     model.load_training_set('../data/toy.csv')
     model.load_prev_pretraining()
-    model.set_training_program(['validity'], [1])
+    model.set_training_program(['bandgap'], [1])
     model.load_metrics()
     model.train()

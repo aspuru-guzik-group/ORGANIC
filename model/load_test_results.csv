@@ -1,0 +1,2 @@
+exp_name,Batch,mean_length,n_samples,uniq_samples,good_samples,bad_samples,model_samples,neg-loglike,D_loss_0,Accuracy_0,D_loss_1,Accuracy_1
+load_test,0,41.57384375,32000,32000,0,32000,load_test_0,1.1212880611419678,2.221259355545044,1.0,1.9437426328659058,1.0

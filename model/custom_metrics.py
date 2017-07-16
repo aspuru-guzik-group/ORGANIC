@@ -15,6 +15,7 @@ from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 from copy import deepcopy
 from math import exp, log
 from collections import OrderedDict
+from nn_metrics import *
 from mol_methods import *
 
 
@@ -661,11 +662,29 @@ bit array containing Morgan fingerprints.
 """
 
 
-def batch_PCE(smiles, train_smiles=None):
-    cnn = cnn_pce(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile)
-            else 0.0 for smile in smiles]
+def batch_PCE(smiles, train_smiles=None, cnn=None):
+
+    if cnn == None:
+        raise ValueError('The PCE metric was not properly loaded.')
+    fsmiles = []
+    zeroindex = []
+    for k, sm in enumerate(smiles):
+        if verify_sequence(sm):
+            fsmiles.append(sm)
+        else:
+            fsmiles.append('c1ccccc1')
+            zeroindex.append(k)
+    vals = np.asarray(cnn.predict(fsmiles))
+    for k in zeroindex:
+        vals[k] = 0.0
+    vals = np.squeeze(np.stack(vals, axis=1))
     return remap(vals, np.amin(vals), np.amax(vals))
+
+def load_PCE():
+    cnn_pce = CustomNN('pce')
+    cnn_pce.load('./neuralnets/pce.h5')
+    return ('cnn', cnn_pce)
+
 
 #
 # 2.14. Bandgap
@@ -677,11 +696,28 @@ molecule,using a CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
 """
 
 
-def batch_bandgap(smiles, train_smiles=None):
-    cnn = cnn_homolumo(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile)
-            else 0.0 for smile in smiles]
+def batch_bandgap(smiles, train_smiles=None, cnn=None):
+
+    if cnn == None:
+        raise ValueError('The bandgap metric was not properly loaded.')
+    fsmiles = []
+    zeroindex = []
+    for k, sm in enumerate(smiles):
+        if verify_sequence(sm):
+            fsmiles.append(sm)
+        else:
+            fsmiles.append('c1ccccc1')
+            zeroindex.append(k)
+    vals = np.asarray(cnn.predict(fsmiles))
+    for k in zeroindex:
+        vals[k] = 0.0
+    vals = np.squeeze(np.stack(vals, axis=1))
     return remap(vals, np.amin(vals), np.amax(vals))
+
+def load_bandgap():
+    cnn_bandgap = CustomNN('bandgap')
+    cnn_bandgap.load('./neuralnets/bandgap.h5')
+    return ('cnn', cnn_bandgap)
 
 #
 # 2.15. Substructure match
@@ -840,12 +876,28 @@ CNN on a 64x64/32x32 bit array containing Morgan fingerprints.
 """
 
 
-def batch_mp(smiles, train_smiles=None):
-    cnn = cnn_mp(lbit=32)
-    vals = [cnn.predict(smile) if verify_sequence(smile)
-            else 0.0 for smile in smiles]
+def batch_mp(smiles, train_smiles=None, cnn=None):
+
+    if cnn == None:
+        raise ValueError('The melting point metric was not properly loaded.')
+    fsmiles = []
+    zeroindex = []
+    for k, sm in enumerate(smiles):
+        if verify_sequence(sm):
+            fsmiles.append(sm)
+        else:
+            fsmiles.append('c1ccccc1')
+            zeroindex.append(k)
+    vals = np.asarray(cnn.predict(fsmiles))
+    for k in zeroindex:
+        vals[k] = 0.0
+    vals = np.squeeze(np.stack(vals, axis=1))
     return remap(vals, np.amin(vals), np.amax(vals))
 
+def load_mp():
+    cnn_mp = CustomNN('mp')
+    cnn_mp.load('./neuralnets/mp.h5')
+    return ('cnn', cnn_mp)
 
 ############################################
 #
@@ -876,8 +928,9 @@ def metrics_loading():
     load['drug_candidate'] = load_SA
     load['lipinski'] = lambda *args: None
     load['naturalness'] = load_NP
-    # load['pce'] = load_PCE
-    # load['bandgap'] = load_bandgap
+    load['pce'] = load_PCE
+    load['bandgap'] = load_bandgap
+    load['mp'] = load_mp
     load['substructure_match_all'] = load_substructure_match_all
     load['substructure_match_any'] = load_substructure_match_any
     load['substructure_absence'] = load_substructure_absence
@@ -902,9 +955,9 @@ def get_metrics():
     metrics['synthesizability'] = batch_SA
     metrics['lipinski'] = batch_lipinski
     metrics['drug_candidate'] = batch_drugcandidate
-   # metrics['pce'] = batch_PCE
-   # metrics['bandgap'] = batch_bandgap
-   # metrics['substructure_match'] = batch_substructure_match
+    metrics['pce'] = batch_PCE
+    metrics['bandgap'] = batch_bandgap
+    metrics['mp'] = batch_mp
     metrics['substructure_match_all'] = batch_substructure_match_all
     metrics['substructure_match_any'] = batch_substructure_match_any
     metrics['substructure_absence'] = batch_substructure_absence
