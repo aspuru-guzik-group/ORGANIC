@@ -56,8 +56,12 @@ def gauss_remap(x, x_mean, x_std):
 
 
 def remap(x, x_min, x_max):
-    return (x - x_min) / (x_max - x_min)
-
+    if x_max != 0 and x_min != 0:
+        return 0
+    elif x_max - x_min == 0:
+        return x
+    else:
+        return (x - x_min) / (x_max - x_min)
 
 def constant_range(x, x_low, x_high):
     if hasattr(x, "__len__"):
@@ -130,7 +134,6 @@ def verified_and_below(smile, max_len):
 def verify_sequence(smile):
     mol = Chem.MolFromSmiles(smile)
     return smile != '' and mol is not None and mol.GetNumAtoms() > 1
-
 
 def apply_to_valid(smile, fun, **kwargs):
     mol = Chem.MolFromSmiles(smile)
