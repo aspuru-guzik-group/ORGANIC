@@ -1,5 +1,6 @@
 import numpy as np
 import rdkit.Chem.AllChem as Chem
+import tensorflow as tf
 from keras.layers import Dense, Dropout
 from keras.models import Sequential
 from keras.layers.normalization import BatchNormalization
@@ -23,9 +24,9 @@ class NN(object):
             A list containing the predictions.
 
         """
-
-        input_x = self.computeFingerprints(smiles)
-        return self.nn.predict(input_x, batch_size=batch_size)
+        with self.graph.as_default():
+            input_x = self.computeFingerprints(smiles)
+            return self.nn.predict(input_x, batch_size=batch_size)
 
     def evaluate(self, train_x, train_y):
         """
@@ -43,9 +44,9 @@ class NN(object):
             A list containing the predictions.
 
         """
-
-        input_x = self.computeFingerprints(train_x)
-        return self.nn.evaluate(input_x, train_y, verbose=0)
+        with self.graph.as_default():
+            input_x = self.computeFingerprints(train_x)
+            return self.nn.evaluate(input_x, train_y, verbose=0)
 
     def train(self, train_x, train_y, batch_size, nepochs):
         """
@@ -69,19 +70,19 @@ class NN(object):
             training program.
 
         """
+        with self.graph.as_default():
+            input_x = self.computeFingerprints(train_x)
+            callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.01, patience=10, verbose=0, mode='auto'),
+                         TQDMCallback()]
+            history = self.nn.fit(input_x, train_y,
+                                  shuffle=True,
+                                  epochs=nepochs,
+                                  batch_size=batch_size,
+                                  validation_split=0.1,
+                                  verbose=2,
+                                  callbacks=callbacks)
 
-        input_x = self.computeFingerprints(train_x)
-        callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.01, patience=10, verbose=0, mode='auto'),
-                     TQDMCallback()]
-        history = self.nn.fit(input_x, train_y,
-                              shuffle=True,
-                              epochs=nepochs,
-                              batch_size=batch_size,
-                              validation_split=0.1,
-                              verbose=2,
-                              callbacks=callbacks)
-
-        return history
+            return history
 
     def load(self, file):
         """
@@ -92,8 +93,8 @@ class NN(object):
             - file. A string pointing to the .h5 file.
 
         """
-
-        self.nn.load_weights(file, by_name=True)
+        with self.graph.as_default():
+            self.nn.load_weights(file, by_name=True)
 
     def computeFingerprints(self, smiles):
         """
@@ -157,12 +158,14 @@ class CustomNN(NN):
 
         """
 
-        model = Sequential()
-        model.add(Dropout(0.2, input_shape=(4096,)))
-        model.add(BatchNormalization())
-        model.add(Dense(300, activation='relu', kernel_initializer='normal'))
-        model.add(Dense(300, activation='relu', kernel_initializer='normal'))
-        model.add(Dense(1, activation='linear', kernel_initializer='normal'))
-        model.compile(optimizer='adam', loss='mse')
+        self.graph = tf.Graph()
+        with self.graph.as_default():
+            model = Sequential()
+            model.add(Dropout(0.2, input_shape=(4096,)))
+            model.add(BatchNormalization())
+            model.add(Dense(300, activation='relu', kernel_initializer='normal'))
+            model.add(Dense(300, activation='relu', kernel_initializer='normal'))
+            model.add(Dense(1, activation='linear', kernel_initializer='normal'))
+            model.compile(optimizer='adam', loss='mse')
 
         return model
