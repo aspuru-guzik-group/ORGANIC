@@ -5,21 +5,22 @@ ChemORGAN is a molecular discovery tool able to generate new molecules with some
 This implementation of ChemORGAN is authored by Carlos Outeiral (couteiral@gmail.com), Benjamin Sanchez-Lengeling (beangoben@gmail.com) and Alan Aspuru-Guzik (alan@aspuru.com), 
 
 ## Requirements
-> tensorflow==1.2
-> keras
-> future==0.16.0
-> numpy
-> scipy
-> pandas
-> matplotlib
-> seaborn
-> rdkit
-> tqdm
-> pymatgen
+
+>> tensorflow==1.2
+>> keras
+>> future==0.16.0
+>> numpy
+>> scipy
+>> pandas
+>> matplotlib
+>> seaborn
+>> rdkit
+>> tqdm
+>> pymatgen
 
 ## How to install
 
-First, clone our repo:
+To use, just clone our repo:
 
 ```
 git clone https://github.com/couteiral/ChemORGAN.git
@@ -28,7 +29,7 @@ git clone https://github.com/couteiral/ChemORGAN.git
 And, it is done!
 ## How to use
 
-ChemORGAN has been carefully designed to be tremendously simple, while still allowing intense customization of every parameter. This is the minimal functional code:
+ChemORGAN has been carefully designed to be tremendously simple, while still allowing intense customization of every parameter. Check the following example of a minimal functional example:
 
 ```python
 model = ChemORGAN('OPVs')                   # Loads a ChemORGAN with name 'OPVs'
