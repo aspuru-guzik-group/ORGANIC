@@ -1,22 +1,21 @@
 # ChemORGAN
+------------------
 
-ChemORGAN is a molecular discovery tool able to generate new molecules with some previously specified properties. It is based on the Objective-Reinforced Generative Adversarial Networks (ORGAN) architecture, developed in our laboratory in the Department of Chemistry and Chemical Biology, Harvard University. You are invited to read our article about ChemORGAN, and to contact our developers for any issue or interest to collaborate.
+**ChemORGAN** is an efficient molecular discovery tool, able to create molecules with desired properties. We invite you to check our article about ChemORGAN, and/or contact the developers if you have any issue or are interested in collaborations.
 
-This implementation of ChemORGAN is authored by Carlos Outeiral (couteiral@gmail.com), Benjamin Sanchez-Lengeling (beangoben@gmail.com) and Alan Aspuru-Guzik (alan@aspuru.com), 
+This implementation of ChemORGAN is authored by Carlos Outeiral (couteiral@gmail.com), Benjamin Sanchez-Lengeling (beangoben@gmail.com) and Alan Aspuru-Guzik (alan@aspuru.com), affiliated to Harvard University, Department of Chemistry and Chemical Biology, at the time of release.
 
 ## Requirements
 
-* tensorflow==1.2
-* keras
-* future==0.16.0
-* numpy
-* scipy
-* pandas
-* matplotlib
-* seaborn
-* rdkit
-* tqdm
-* pymatgen
+- tensorflow==1.2
+- future==0.16.0
+- rdkit
+- keras
+- numpy
+- scipy
+- pandas
+- tqdm
+- pymatgen
 
 ## How to install
 
@@ -29,7 +28,7 @@ git clone https://github.com/couteiral/ChemORGAN.git
 And, it is done!
 ## How to use
 
-ChemORGAN has been carefully designed to be tremendously simple, while still allowing intense customization of every parameter. Check the following example of a minimal functional example:
+ChemORGAN has been carefully designed to be simple, while still allowing full customization of every parameter in the models. Have a look at a minimal example of our code:
 
 ```python
 model = ChemORGAN('OPVs')                   # Loads a ChemORGAN with name 'OPVs'
@@ -38,3 +37,5 @@ model.set_training_program(['PCE'], [50])   # Sets the training program as 50 ep
 model.load_metrics()                        # Loads all the metrics
 model.train()                               # Proceeds with the training
 ```
+
+
