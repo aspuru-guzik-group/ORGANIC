@@ -6,17 +6,17 @@ This implementation of ChemORGAN is authored by Carlos Outeiral (couteiral@gmail
 
 ## Requirements
 
->> tensorflow==1.2
->> keras
->> future==0.16.0
->> numpy
->> scipy
->> pandas
->> matplotlib
->> seaborn
->> rdkit
->> tqdm
->> pymatgen
+* tensorflow==1.2
+* keras
+* future==0.16.0
+* numpy
+* scipy
+* pandas
+* matplotlib
+* seaborn
+* rdkit
+* tqdm
+* pymatgen
 
 ## How to install
 
