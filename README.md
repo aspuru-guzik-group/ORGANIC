@@ -3,7 +3,7 @@
 
 **ChemORGAN** is an efficient molecular discovery tool, able to create molecules with desired properties. It has a user-oriented interface, and doesn't require a HPC cluster. Feel free to check our article about ChemORGAN, and/or contact the developers if you have any issue or are interested in collaborations.
 
-This implementation of ChemORGAN is authored by Carlos Outeiral (couteiral@gmail.com), Benjamin Sanchez-Lengeling (beangoben@gmail.com) and Alan Aspuru-Guzik (alan@aspuru.com), affiliated to Harvard University, Department of Chemistry and Chemical Biology, at the time of release.
+This implementation of ChemORGAN is authored by **Carlos Outeiral** (couteiral@gmail.com), **Benjamin Sanchez-Lengeling** (beangoben@gmail.com) and **Alan Aspuru-Guzik** (alan@aspuru.com), affiliated to Harvard University, Department of Chemistry and Chemical Biology, at the time of release.
 
 ## Installation
 ### How-to
