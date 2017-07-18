@@ -161,7 +161,7 @@ class CustomNN(NN):
         self.graph = tf.Graph()
         with self.graph.as_default():
             model = Sequential()
-            model.add(Dropout(0.2, input_shape=(4096,)))
+            model.add(Dropout(0.2, input_shape=(self.nBits,)))
             model.add(BatchNormalization())
             model.add(Dense(300, activation='relu', kernel_initializer='normal'))
             model.add(Dense(300, activation='relu', kernel_initializer='normal'))
