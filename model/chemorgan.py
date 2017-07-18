@@ -2,9 +2,8 @@ from __future__ import absolute_import, division, print_function
 from gpu_utils import pick_gpus_lowest_memory
 from builtins import range
 from collections import OrderedDict
-import os
-os.environ['KERAS_BACKEND'] = 'theano'
 from generator import Generator, Rollout
+import os
 import numpy as np
 import tensorflow as tf
 import random
@@ -20,15 +19,15 @@ from tqdm import tqdm
 __version__ = '0.3.0'
 
 __logo__ = """
-//////////////////////////////////////////////////////////////////
-     ___ _                      ___                       
-    / __\ |__   ___ _ __ ___   /___\_ __ __ _  __ _ _ __  
-   / /  | '_ \ / _ \ '_ ` _ \ //  // '__/ _` |/ _` | '_ \ 
-  / /___| | | |  __/ | | | | / \_//| | | (_| | (_| | | | |
-  \____/|_| |_|\___|_| |_| |_\___/ |_|  \__, |\__,_|_| |_|
-                                        |___/             
-                                             version {}            
-////////////////////////////////////////////////////////////////"""
+###############################################################
+      ___ _                      ___                          
+    / __\ |__   ___ _ __ ___   /___\_ __ __ _  __ _ _ __     
+   / /  | '_ \ / _ \ '_ ` _ \ //  // '__/ _` |/ _` | '_ \    
+  / /___| | | |  __/ | | | | / \_//| | | (_| | (_| | | | |   
+  \____/|_| |_|\___|_| |_| |_\___/ |_|  \__, |\__,_|_| |_|   
+                                        |___/                
+                                             version {}     
+###############################################################\n\n"""
 
 
 class ChemORGAN(object):
@@ -139,6 +138,8 @@ class ChemORGAN(object):
         if 'LAMBDA' in self.params:
             self.LAMBDA = self.params['LAMBDA']
             self.D = max(int(5 * self.LAMBDA), 1)
+        if 'MAX_LENGTH' in self.params:
+            self.MAX_LENGTH = self.params['MAX_LENGTH']
 
         # Discriminator hyperparameters
         if 'DIS_EMB_DIM' in self.params:
@@ -182,6 +183,7 @@ class ChemORGAN(object):
 
         self.gen_loader = Gen_Dataloader(self.GEN_BATCH_SIZE)
         self.dis_loader = Dis_Dataloader()
+        self.mle_loader = Gen_Dataloader(self.GEN_BATCH_SIZE)
         self.generator = Generator(self.NUM_EMB, self.GEN_BATCH_SIZE, self.GEN_EMB_DIM,
                                    self.GEN_HIDDEN_DIM, self.MAX_LENGTH, self.START_TOKEN)
         self.set_discriminator()
@@ -341,20 +343,21 @@ class ChemORGAN(object):
             print(' gen pre-train')
             loss = self.pre_train_epoch(sess, generator, self.gen_loader)
             if epoch == 10 or epoch % 40 == 0:
-                samples = self.generate_samples(
-                    sess, generator, self.GEN_BATCH_SIZE, self.SAMPLE_NUM)
-                self.gen_loader.create_batches(samples)
+                samples = self.generate_samples(sess, generator, self.GEN_BATCH_SIZE, self.SAMPLE_NUM)
+                self.mle_loader.create_batches(samples)
                 print('\t train_loss {}'.format(loss))
                 mm.compute_results(
                     samples, self.train_samples, self.ord_dict, results)
 
         samples = self.generate_samples(
             sess, generator, self.GEN_BATCH_SIZE, self.SAMPLE_NUM)
-        self.gen_loader.create_batches(samples)
+        #self.gen_loader.create_batches(samples)
+        self.mle_loader.create_batches(samples)
 
         samples = self.generate_samples(
             sess, generator, self.GEN_BATCH_SIZE, self.SAMPLE_NUM)
-        self.gen_loader.create_batches(samples)
+        #self.gen_loader.create_batches(samples)
+        self.mle_loader.create_batches(samples)
 
         print('Start training discriminator...')
         for i in tqdm(range(self.PRETRAIN_DIS_EPOCHS)):
@@ -510,7 +513,7 @@ class ChemORGAN(object):
 
 if __name__ == '__main__':
 
-    model = ChemORGAN('load_test', params={'PRETRAIN_GEN_EPOCHS': 1, 'PRETRAIN_DIS_EPOCHS': 1})
+    model = ChemORGAN('load_test', params={'PRETRAIN_GEN_EPOCHS': 300, 'PRETRAIN_DIS_EPOCHS': 1})
     model.load_training_set('../data/toy.csv')
     model.load_prev_pretraining()
     model.set_training_program(['bandgap'], [1])
