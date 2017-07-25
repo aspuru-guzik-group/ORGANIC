@@ -7,200 +7,265 @@ import os
 import numpy as np
 import tensorflow as tf
 import random
-import time
 import mol_methods as mm
-import json
 from data_loaders import Gen_Dataloader, Dis_Dataloader
 from discriminator import Discriminator
 from custom_metrics import get_metrics, metrics_loading
+from tensorflow import logging
 from rdkit import rdBase
 import pandas as pd
 from tqdm import tqdm
 __version__ = '0.3.0'
 
 __logo__ = """
-###############################################################
-      ___ _                      ___                          
-    / __\ |__   ___ _ __ ___   /___\_ __ __ _  __ _ _ __     
-   / /  | '_ \ / _ \ '_ ` _ \ //  // '__/ _` |/ _` | '_ \    
-  / /___| | | |  __/ | | | | / \_//| | | (_| | (_| | | | |   
-  \____/|_| |_|\___|_| |_| |_\___/ |_|  \__, |\__,_|_| |_|   
-                                        |___/                
-                                             version {}     
-###############################################################\n\n"""
+################################################################
+       ___ _                      ___                          
+     / __\ |__   ___ _ __ ___   /___\_ __ __ _  __ _ _ __     
+    / /  | '_ \ / _ \ '_ ` _ \ //  // '__/ _` |/ _` | '_ \    
+   / /___| | | |  __/ | | | | / \_//| | | (_| | (_| | | | |   
+   \____/|_| |_|\___|_| |_| |_\___/ |_|  \__, |\__,_|_| |_|   
+                                         |___/                
+                                              version {}     
+################################################################\n\n\n\n"""
 
 
 class ChemORGAN(object):
+    """Main class, where every interaction between the user
+    and the backend is performed.
+    """
 
-    def __init__(self, name, params=None, read_file=False, params_file='exp.json'):
+    def __init__(self, name, params=None, use_gpu=True, verbose=True):
+        """Parameter initialization.
 
+        Arguments
+        -----------
+
+            - name. String which will be used to identify the
+            model in any folders or files created.
+
+            - params. Optional. Dictionary containing the parameters
+            that the user whishes to specify.
+
+            - use_gpu. Boolean specifying whether a GPU should be
+            used. True by default.
+
+            - verbose. Boolean specifying whether output must be
+            produced in-line.
+
+        """
+
+        self.verbose = verbose
+
+        # Print logo. Isn't it cool?
+        # (Although it is cool, we won't print it if you don't want)
+        if self.verbose:
+            print(__logo__.format(__version__))
+
+        # Set minimum verbosity for RDKit, Keras and TF backends
+        os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        logging.set_verbosity(logging.INFO)
         rdBase.DisableLog('rdApp.error')
-        print(__logo__.format(__version__))
-        self.detect_gpu()
-        self.PREFIX = name
-        self.set_default()
 
-        if read_file == True:
-            self.params = json.loads(
-                open(params_file).read(), object_pairs_hook=OrderedDict)
-            self.set_user_parameters()
-            print('Parameters loaded from {}'.format(params_file))
-        elif params is not None:
-            self.params = params
-            self.set_user_parameters()
-            print('Parameters loaded from user-specified dictionary.')
-        else:
-            print('No parameters were specified. ChemORGAN will use default values.')
-
-        self.pretrain_is_loaded = False
-        self.sess_is_loaded = False
-
-    def detect_gpu(self):
-
+        # Detect GPU
         self.config = tf.ConfigProto()
-
         try:
             gpu_free_number = str(pick_gpus_lowest_memory()[0, 0])
             os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
             print('GPUs {} detected and selected'.format(gpu_free_number))
             self.config.gpu_options.allow_growth = True
-
         except Exception:
             print('No GPU detected')
             pass
 
-    def set_default(self):
+        # Set parameters
+        self.PREFIX = name
 
-        # Training hyperparameters
-        self.PRETRAIN_GEN_EPOCHS = 240
-        self.PRETRAIN_DIS_EPOCHS = 50
-        self.GEN_ITERATIONS = 2  # generator
-        self.GEN_BATCH_SIZE = 64
-        self.SEED = None
-        self.DIS_BATCH_SIZE = 64
-        self.DIS_EPOCHS = 3
-        self.EPOCH_SAVES = 20
-        self.CHK_PATH = os.path.join(os.getcwd(), 'checkpoints/{}'.format(self.PREFIX))
+        if 'PRETRAIN_GEN_EPOCHS' in params:
+            self.PRETRAIN_GEN_EPOCHS = params['PRETRAIN_GEN_EPOCHS']
+        else:
+            self.PRETRAIN_GEN_EPOCHS = 240
 
-        # Generator hyperparameters
-        self.GEN_EMB_DIM = 32
-        self.GEN_HIDDEN_DIM = 32
-        self.START_TOKEN = 0
-        self.SAMPLE_NUM = 6400
-        self.BIG_SAMPLE_NUM = self.SAMPLE_NUM * 5
-        self.LAMBDA = 0.5
-        self.D = max(int(5 * self.LAMBDA), 1)
+        if 'PRETRAIN_DIS_EPOCHS' in params:
+            self.PRETRAIN_DIS_EPOCHS = params['PRETRAIN_DIS_EPOCHS']
+        else:
+            self.PRETRAIN_DIS_EPOCHS = 50
 
-        # Discriminator hyperparameters
-        self.DIS_EMB_DIM = 64
-        self.DIS_FILTER_SIZES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
-        self.DIS_NUM_FILTERS = [100, 200, 200, 200,
-                                200, 100, 100, 100, 100, 100, 160, 160]
-        self.DIS_DROPOUT = 0.75
-        self.DIS_L2REG = 0.2
+        if 'GEN_ITERATIONS' in params:
+            self.GEN_ITERATIONS = params['GEN_ITERATIONS']
+        else:
+            self.GEN_ITERATIONS = 2
 
-    def set_user_parameters(self):
+        if 'GEN_BATCH_SIZE' in params:
+            self.GEN_BATCH_SIZE = params['GEN_BATCH_SIZE']
+        else:
+            self.GEN_BATCH_SIZE = 64
 
-        # Training hyperparameters
-        if 'PRETRAIN_GEN_EPOCHS' in self.params:
-            self.PRETRAIN_GEN_EPOCHS = self.params['PRETRAIN_GEN_EPOCHS']
-        if 'PRETRAIN_DIS_EPOCHS' in self.params:
-            self.PRETRAIN_DIS_EPOCHS = self.params['PRETRAIN_DIS_EPOCHS']
-        if 'GEN_ITERATIONS' in self.params:
-            self.GEN_ITERATIONS = self.params['GEN_ITERATIONS']  # generator
-        if 'GEN_BATCH_SIZE' in self.params:
-            self.GEN_BATCH_SIZE = self.params['GEN_BATCH_SIZE']
-        if 'SEED' in self.params:
-            self.SEED = self.params['SEED']
-        if 'DIS_BATCH_SIZE' in self.params:
-            self.DIS_BATCH_SIZE = self.params['DIS_BATCH_SIZE']
-        if 'DIS_EPOCHS' in self.params:
-            self.DIS_EPOCHS = self.params['DIS_EPOCHS']
-        if 'EPOCH_SAVES' in self.params:
-            self.EPOCH_SAVES = self.params['EPOCH_SAVES']
-        if 'CHK_PATH' in self.params:
-            self.CHK_PATH = self.params['CHK_PATH']
-
-        # Generator hyperparameters
-        if 'GEN_EMB_DIM' in self.params:
-            self.GEN_EMB_DIM = self.params['GEN_EMB_DIM']
-        if 'GEN_HIDDEN_DIM' in self.params:
-            self.GEN_HIDDEN_DIM = self.params['GEN_HIDDEN_DIM']
-        if 'START_TOKEN' in self.params:
-            self.START_TOKEN = self.params['START_TOKEN']
-        if 'SAMPLE_NUM' in self.params:
-            self.SAMPLE_NUM = self.params['SAMPLE_NUM']
-        if 'BIG_SAMPLE_NUM' in self.params:
-            self.BIG_SAMPLE_NUM = self.params['BIG_SAMPLE_NUM']
-        elif 'SAMPLE_NUM' in self.params:
-            self.BIG_SAMPLE_NUM = self.params['SAMPLE_NUM'] * 5
-        if 'LAMBDA' in self.params:
-            self.LAMBDA = self.params['LAMBDA']
-            self.D = max(int(5 * self.LAMBDA), 1)
-        if 'MAX_LENGTH' in self.params:
-            self.MAX_LENGTH = self.params['MAX_LENGTH']
-
-        # Discriminator hyperparameters
-        if 'DIS_EMB_DIM' in self.params:
-            self.DIS_EMB_DIM = self.params['DIS_EMB_DIM']
-        if 'DIS_FILTER_SIZES' in self.params:
-            self.DIS_FILTER_SIZES = self.params['DIS_FILTER_SIZES']
-        if 'DIS_NUM_FILTERS' in self.params:
-            self.DIS_NUM_FILTERS = self.params['DIS_FILTER_SIZES']
-        if 'DIS_DROPOUT' in self.params:
-            self.DIS_DROPOUT = self.params['DIS_DROPOUT']
-        if 'DIS_L2REG' in self.params:
-            self.DIS_L2REG = self.params['DIS_L2REG']
-
-    def load_training_set(self, file):
-        
-        self.train_samples = mm.load_train_data(file)
-        self.char_dict, self.ord_dict = mm.build_vocab(self.train_samples)
-        self.NUM_EMB = len(self.char_dict)
-        self.PAD_CHAR = self.ord_dict[self.NUM_EMB-1]
-        self.PAD_NUM = self.char_dict[self.PAD_CHAR]
-        self.DATA_LENGTH = max(map(len, self.train_samples))
-        if not hasattr(self, 'MAX_LENGTH'):
-            self.MAX_LENGTH = int(len(max(self.train_samples, key=len)) * 1.5)
-        to_use = [sample for sample in self.train_samples if mm.verified_and_below(
-            sample, self.MAX_LENGTH)]
-        self.positive_samples = [mm.encode(sample, self.MAX_LENGTH, self.char_dict)
-                                 for sample in to_use]
-        self.POSITIVE_NUM = len(self.positive_samples)
-        print('Starting ObjectiveGAN for {:7s}'.format(self.PREFIX))
-        print('Data points in train_file {:7d}'.format(
-            len(self.train_samples)))
-        print('Max data length is        {:7d}'.format(self.DATA_LENGTH))
-        print('Max length to use is      {:7d}'.format(self.MAX_LENGTH))
-        print('Avg length to use is      {:7f}'.format(
-            np.mean([len(s) for s in to_use])))
-        print('Num valid data points is  {:7d}'.format(self.POSITIVE_NUM))
-        print('Size of alphabet is       {:7d}'.format(self.NUM_EMB))
+        if 'SEED' in params:
+            self.SEED = params['SEED']
+        else:
+            self.SEED = None
         random.seed(self.SEED)
         np.random.seed(self.SEED)
-        #mm.print_params(self.params)
 
+        if 'DIS_BATCH_SIZE' in params:
+            self.DIS_BATCH_SIZE = params['DIS_BATCH_SIZE']
+        else:
+            self.DIS_BATCH_SIZE = 64
+
+        if 'DIS_EPOCHS' in params:
+            self.DIS_EPOCHS = params['DIS_EPOCHS']
+        else:
+            self.DIS_EPOCHS = 3
+
+        if 'EPOCH_SAVES' in params:
+            self.EPOCH_SAVES = params['EPOCH_SAVES']
+        else:
+            self.EPOCH_SAVES = 20
+
+        if 'CHK_PATH' in params:
+            self.CHK_PATH = params['CHK_PATH']
+        else:
+            self.CHK_PATH = os.path.join(
+                os.getcwd(), 'checkpoints/{}'.format(self.PREFIX))
+
+        if 'GEN_EMB_DIM' in params:
+            self.GEN_EMB_DIM = params['GEN_EMB_DIM']
+        else:
+            self.GEN_EMB_DIM = 32
+
+        if 'GEN_HIDDEN_DIM' in params:
+            self.GEN_HIDDEN_DIM = params['GEN_HIDDEN_DIM']
+        else:
+            self.GEN_HIDDEN_DIM = 32
+
+        if 'START_TOKEN' in params:
+            self.START_TOKEN = params['START_TOKEN']
+        else:
+            self.START_TOKEN = 0
+
+        if 'SAMPLE_NUM' in params:
+            self.SAMPLE_NUM = params['SAMPLE_NUM']
+        else:
+            self.SAMPLE_NUM = 6400
+
+        if 'BIG_SAMPLE_NUM' in params:
+            self.BIG_SAMPLE_NUM = params['BIG_SAMPLE_NUM']
+        else:
+            self.BIG_SAMPLE_NUM = self.SAMPLE_NUM * 5
+
+        if 'LAMBDA' in params:
+            self.LAMBDA = params['LAMBDA']
+        else:
+            self.LAMBDA = 0.5
+
+        # In case this parameter is not specified by the user,
+        # it will be determined later, in the training set
+        # loading.
+        if 'MAX_LENGTH' in params:
+            self.MAX_LENGTH = params['MAX_LENGTH']
+
+        if 'DIS_EMB_DIM' in params:
+            self.DIS_EMB_DIM = params['DIS_EMB_DIM']
+        else:
+            self.DIS_EMB_DIM = 64
+
+        if 'DIS_FILTER_SIZES' in params:
+            self.DIS_FILTER_SIZES = params['DIS_FILTER_SIZES']
+        else:
+            self.DIS_FILTER_SIZES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
+
+        if 'DIS_NUM_FILTERS' in params:
+            self.DIS_NUM_FILTERS = params['DIS_FILTER_SIZES']
+        else:
+            self.DIS_NUM_FILTERS = [100, 200, 200, 200, 200, 100,
+                                    100, 100, 100, 100, 160, 160]
+
+        if 'DIS_DROPOUT' in params:
+            self.DIS_DROPOUT = params['DIS_DROPOUT']
+        else:
+            self.DIS_DROPOUT = 0.75
+        if 'DIS_L2REG' in params:
+            self.DIS_L2REG = params['DIS_L2REG']
+        else:
+            self.DIS_L2REG = 0.2
+
+        self.PRETRAINED = False
+        self.SESS_LOADED = False
+
+    def load_training_set(self, file):
+        """Specifies a training set for the model. It also finishes
+        the model set up, as some of the internal parameters require
+        knowledge of the vocabulary.
+
+        Arguments
+        -----------
+
+            - file. String pointing to a .smi or .csv file.
+
+        """
+
+        # Load training set
+        self.train_samples = mm.load_train_data(file)
+
+        # Process and create vocabulary
+        self.char_dict, self.ord_dict = mm.build_vocab(self.train_samples)
+        self.NUM_EMB = len(self.char_dict)
+        self.PAD_CHAR = self.ord_dict[self.NUM_EMB - 1]
+        self.PAD_NUM = self.char_dict[self.PAD_CHAR]
+        self.DATA_LENGTH = max(map(len, self.train_samples))
+
+        # If MAX_LENGTH has not been specified by the user, it
+        # will be set as 1.5 times the maximum length in the
+        # trining set.
+        if not hasattr(self, 'MAX_LENGTH'):
+            self.MAX_LENGTH = int(len(max(self.train_samples, key=len)) * 1.5)
+
+        # Encode samples
+        to_use = [sample for sample in self.train_samples
+                  if mm.verified_and_below(sample, self.MAX_LENGTH)]
+        self.positive_samples = [mm.encode(sam,
+                                           self.MAX_LENGTH,
+                                           self.char_dict) for sam in to_use]
+        self.POSITIVE_NUM = len(self.positive_samples)
+
+        # Print information
+        if self.verbose:
+
+            print('\nPARAMETERS INFORMATION')
+            print('============================\n')
+            print('Model name               :   {}'.format(self.PREFIX))
+            print('Training set size        :   {} points'.format(
+                len(self.train_samples)))
+            print('Max data length          :   {}'.format(self.MAX_LENGTH))
+            print('Avg length to use is     :   {}'.format(
+                np.mean([len(s) for s in to_use])))
+            print('Num valid data points is :   {}'.format(
+                self.POSITIVE_NUM))
+            print('Size of alphabet is      :   {}'.format(self.NUM_EMB))
+            print('')
+
+            params = ['PRETRAIN_GEN_EPOCHS', 'PRETRAIN_DIS_EPOCHS',
+                      'GEN_ITERATIONS', 'GEN_BATCH_SIZE', 'SEED',
+                      'DIS_BATCH_SIZE', 'DIS_EPOCHS', 'EPOCH_SAVES',
+                      'CHK_PATH', 'GEN_EMB_DIM', 'GEN_HIDDEN_DIM',
+                      'START_TOKEN', 'SAMPLE_NUM', 'BIG_SAMPLE_NUM',
+                      'LAMBDA', 'MAX_LENGTH', 'DIS_EMB_DIM',
+                      'DIS_FILTER_SIZES', 'DIS_NUM_FILTERS',
+                      'DIS_DROPOUT', 'DIS_L2REG']
+
+            for param in params:
+                string = param + ' ' * (25 - len(param))
+                value = getattr(self, param)
+                print('{}:   {}'.format(string, value))
+
+        # Set model
         self.gen_loader = Gen_Dataloader(self.GEN_BATCH_SIZE)
         self.dis_loader = Dis_Dataloader()
         self.mle_loader = Gen_Dataloader(self.GEN_BATCH_SIZE)
-        self.generator = Generator(self.NUM_EMB, self.GEN_BATCH_SIZE, self.GEN_EMB_DIM,
-                                   self.GEN_HIDDEN_DIM, self.MAX_LENGTH, self.START_TOKEN)
-        self.set_discriminator()
-        self.sess = tf.Session(config=self.config)
-
-    def set_training_program(self, metrics=None, steps=None):
-
-        self.TOTAL_BATCH = np.sum(np.asarray(steps))
-        self.EDUCATION = {}
-        self.METRICS = metrics
-        i = 0
-        for j, stage in enumerate(steps):
-            for _ in range(stage):
-                self.EDUCATION[i] = metrics[j]
-                i += 1
-
-    def set_discriminator(self):
+        self.generator = Generator(self.NUM_EMB, self.GEN_BATCH_SIZE,
+                                   self.GEN_EMB_DIM, self.GEN_HIDDEN_DIM,
+                                   self.MAX_LENGTH, self.START_TOKEN)
 
         with tf.variable_scope('discriminator'):
             self.discriminator = Discriminator(
@@ -211,10 +276,8 @@ class ChemORGAN(object):
                 filter_sizes=self.DIS_FILTER_SIZES,
                 num_filters=self.DIS_NUM_FILTERS,
                 l2_reg_lambda=self.DIS_L2REG)
-
         self.dis_params = [param for param in tf.trainable_variables()
                            if 'discriminator' in param.name]
-        # Define Discriminator Training procedure
         self.dis_global_step = tf.Variable(
             0, name="global_step", trainable=False)
         self.dis_optimizer = tf.train.AdamOptimizer(1e-4)
@@ -223,57 +286,70 @@ class ChemORGAN(object):
         self.dis_train_op = self.dis_optimizer.apply_gradients(
             self.dis_grads_and_vars, global_step=self.dis_global_step)
 
-    def make_reward(self, train_samples, nbatch):
+        self.sess = tf.Session(config=self.config)
+        self.folder = 'checkpoints/{}'.format(self.PREFIX)
 
-        metric = self.EDUCATION[nbatch] 
-        reward_func = self.load_reward(metric)
+    def set_training_program(self, metrics=None, steps=None):
+        """Sets a program of metrics and epochs
+        for training the model and generating molecules.
 
-        if self.kwargs[metric] is not None:
+        Arguments
+        -----------
 
-            def batch_reward(samples):
-                decoded = [mm.decode(sample, self.ord_dict)
-                           for sample in samples]
-                pct_unique = len(list(set(decoded))) / float(len(decoded))
-                rewards = reward_func(decoded, train_samples, **self.kwargs[metric])
-                weights = np.array([pct_unique / float(decoded.count(sample))
-                                    for sample in decoded])
+            - metrics. List of metrics. Each element represents
+            the metric used with a particular set of epochs. Its
+            length must coincide with the steps list.
 
-                return rewards * weights
+            - steps. List of epoch sets. Each element represents
+            the number of epochs for which a given metric will
+            be used. Its length must coincide with the steps list.
 
-            return batch_reward
-        else:
+        Note
+        -----------
 
-            def batch_reward(samples):
-                decoded = [mm.decode(sample, self.ord_dict)
-                           for sample in samples]
-                pct_unique = len(list(set(decoded))) / float(len(decoded))
-                rewards = reward_func(decoded, train_samples)
-                weights = np.array([pct_unique / float(decoded.count(sample))
-                                    for sample in decoded])
+            The program will crash if both lists have different
+            lengths.
 
-                return rewards * weights
+        Example
+        -----------
 
-            return batch_reward
+            The following examples trains the model for, sequentially,
+            20 epochs of PCE, 100 epochs of bandgap and another 20
+            epochs of PCE.
 
+                model = ChemORGAN('model')
+                model.load_training_set('sample.smi')
+                model.set_training_program(['pce', 'bandgap', 'pce'],
+                                           [20, 100, 20])
 
-    def load_reward(self, objective):
+        """
 
-        metrics = get_metrics()
+        # Raise error if the lengths do not match
+        if len(metrics) != len(steps):
+            return ValueError('Unmatching lengths in training program.')
 
-        if objective in metrics.keys():
-            return metrics[objective]
-        else:
-            raise ValueError('objective {} not found!'.format(objective))
-        return
+        # Set important parameters
+        self.TOTAL_BATCH = np.sum(np.asarray(steps))
+        self.METRICS = metrics
+
+        # Build the 'educative program'
+        self.EDUCATION = {}
+        i = 0
+        for j, stage in enumerate(steps):
+            for _ in range(stage):
+                self.EDUCATION[i] = metrics[j]
+                i += 1
 
     def load_metrics(self):
+        """Loads the metrics."""
 
-        loadings = metrics_loading()
+        # Get the list of used metrics
         met = list(set(self.METRICS))
+
+        # Execute the metrics loading
+        loadings = metrics_loading()
         self.kwargs = {}
-
         for m in met:
-
             load_fun = loadings[m]
             args = load_fun()
             if args is not None:
@@ -284,163 +360,224 @@ class ChemORGAN(object):
                     for arg in args:
                         fun_args[arg[0]] = arg[1]
                     self.kwargs[m] = fun_args
-            else: 
+            else:
                 self.kwargs[m] = None
-        return 
 
-    def load_prev_pretraining(self, ckpt_dir=None):
+    def load_prev_pretraining(self, ckpt=None):
+        """
+        Loads a previous pretraining.
 
-        # Loading previous checkpoints
+        Arguments
+        -----------
+
+            - ckpt. String pointing to the ckpt file. By default,
+            'checkpoints/name_pretrain/pretrain_ckpt' is assumed.
+
+        Note
+        -----------
+
+            The models are stored by the Tensorflow API backend. This
+            will generate various files, like in the following ls:
+
+                checkpoint
+                pretrain_ckpt.data-00000-of-00001
+                pretrain_ckpt.index
+                pretrain_ckpt.meta
+
+            In this case, ckpt = 'pretrain_ckpt'.
+
+        Note 2
+        -----------
+
+            Due to its structure, ChemORGAN is very dependent on its
+            hyperparameters (for example, MAX_LENGTH defines the
+            embedding). Most of the errors with this function are
+            related to parameter mismatching.
+
+        """
+
+        # Generate TF saver
         saver = tf.train.Saver()
-        if ckpt_dir is None:
+
+        # Set default checkpoint
+        if ckpt is None:
             ckpt_dir = 'checkpoints/{}_pretrain'.format(self.PREFIX)
-        if not os.path.exists(ckpt_dir):
-            os.makedirs(ckpt_dir)
-        ckpt_file = os.path.join(ckpt_dir, 'pretrain_ckpt')
-        if os.path.isfile(ckpt_file + '.meta'):
-            saver.restore(self.sess, ckpt_file)
-            print('Pretrain loaded from previous checkpoint {}'.format(ckpt_file))
-            self.pretrain_is_loaded = True
+            if not os.path.exists(ckpt_dir):
+                print('No pretraining data was found')
+                return
+            ckpt = os.path.join(ckpt_dir, 'pretrain_ckpt')
+
+        # Load from checkpoint
+        if os.path.isfile(ckpt + '.meta'):
+            saver.restore(self.sess, ckpt)
+            print('Pretrain loaded from previous checkpoint {}'.format(ckpt))
+            self.PRETRAINED = True
         else:
-            print('\t* No pre-training data found as {:s}.'.format(ckpt_file))
+            print('\t* No pre-training data found as {:s}.'.format(ckpt))
 
-    def load_prev_training(self, prev_ckpt):
+    def load_prev_training(self, ckpt=None):
+        """
+        Loads a previous trained model.
 
+        Arguments
+        -----------
+
+            - ckpt. String pointing to the ckpt file. By default,
+            'checkpoints/name/pretrain_ckpt' is assumed.
+
+        Note 1
+        -----------
+
+            The models are stored by the Tensorflow API backend. This
+            will generate various files. An example ls:
+
+                checkpoint
+                validity_model_0.ckpt.data-00000-of-00001
+                validity_model_0.ckpt.index
+                validity_model_0.ckpt.meta
+                validity_model_100.ckpt.data-00000-of-00001
+                validity_model_100.ckpt.index
+                validity_model_100.ckpt.meta
+                validity_model_120.ckpt.data-00000-of-00001
+                validity_model_120.ckpt.index
+                validity_model_120.ckpt.meta
+                validity_model_140.ckpt.data-00000-of-00001
+                validity_model_140.ckpt.index
+                validity_model_140.ckpt.meta
+
+                    ...
+
+                validity_model_final.ckpt.data-00000-of-00001
+                validity_model_final.ckpt.index
+                validity_model_final.ckpt.meta
+
+            Possible ckpt values are 'validity_model_0', 'validity_model_140'
+            or 'validity_model_final'.
+
+        Note 2
+        -----------
+
+            Due to its structure, ChemORGAN is very dependent on its
+            hyperparameters (for example, MAX_LENGTH defines the
+            embedding). Most of the errors with this function are
+            related to parameter mismatching.
+
+        """
+
+        # If there is no Rollout, add it
         if not hasattr(self, 'rollout'):
             self.rollout = Rollout(self.generator, 0.8, self.PAD_NUM)
 
+        # Generate TF Saver
         saver = tf.train.Saver()
-        ckpt_dir = 'checkpoints/{}'.format(self.PREFIX)
-        if not os.path.exists(ckpt_dir):
-            os.makedirs(ckpt_dir)
-        ckpt_file = os.path.join(ckpt_dir, prev_ckpt)
-        if os.path.isfile(ckpt_file + '.meta'):
-            saver.restore(self.sess, ckpt_file)
-            print('Training loaded from previous checkpoint {}'.format(ckpt_file))
-            self.sess_is_loaded = True
+
+        # Set default checkpoint
+        if ckpt is None:
+            ckpt_dir = 'checkpoints/{}'.format(self.PREFIX)
+            if not os.path.exists(ckpt_dir):
+                print('No pretraining data was found')
+                return
+            ckpt = os.path.join(ckpt_dir, 'pretrain_ckpt')
+
+        if os.path.isfile(ckpt + '.meta'):
+            saver.restore(self.sess, ckpt)
+            print('Training loaded from previous checkpoint {}'.format(ckpt))
+            self.SESS_LOADED = True
         else:
-            print('\t* No training checkpoint found as {:s}.'.format(ckpt_file))
- 
-    def pre_train_epoch(self, sess, trainable_model, data_loader):
-        supervised_g_losses = []
-        data_loader.reset_pointer()
+            print('\t* No training checkpoint found as {:s}.'.format(ckpt))
 
-        for it in range(data_loader.num_batch):
-            batch = data_loader.next_batch()
-            _, g_loss, g_pred = trainable_model.pretrain_step(sess, batch)
-            supervised_g_losses.append(g_loss)
+    def pretrain(self):
+        """Pretrains generator and discriminator."""
 
-        return np.mean(supervised_g_losses)
-
-    def pretrain(self, sess, generator, train_discriminator):
         self.gen_loader.create_batches(self.positive_samples)
-        results = OrderedDict({'exp_name': self.PREFIX})
+        # results = OrderedDict({'exp_name': self.PREFIX})
 
-        #  pre-train generator
-        print('Start pre-training...')
-        start = time.time()
+        if self.verbose:
+            print('\nPRETRAINING')
+            print('============================\n')
+            print('GENERATOR PRETRAINING')
+
         for epoch in tqdm(range(self.PRETRAIN_GEN_EPOCHS)):
-            print(' gen pre-train')
-            loss = self.pre_train_epoch(sess, generator, self.gen_loader)
+
+            supervised_g_losses = []
+            self.gen_loader.reset_pointer()
+
+            for it in range(self.gen_loader.num_batch):
+                batch = self.gen_loader.next_batch()
+                _, g_loss, g_pred = self.generator.pretrain_step(self.sess,
+                                                                 batch)
+                supervised_g_losses.append(g_loss)
+            loss = np.mean(supervised_g_losses)
+
             if epoch == 10 or epoch % 40 == 0:
-                samples = self.generate_samples(sess, generator, self.GEN_BATCH_SIZE, self.SAMPLE_NUM)
+
+                samples = self.generate_samples(self.SAMPLE_NUM)
                 self.mle_loader.create_batches(samples)
                 print('\t train_loss {}'.format(loss))
-                mm.compute_results(
-                    samples, self.train_samples, self.ord_dict, results)
+                # mm.compute_results(samples, self.train_samples,
+                #                    self.ord_dict, results)
 
-        samples = self.generate_samples(
-            sess, generator, self.GEN_BATCH_SIZE, self.SAMPLE_NUM)
-        #self.gen_loader.create_batches(samples)
+        samples = self.generate_samples(self.SAMPLE_NUM)
         self.mle_loader.create_batches(samples)
 
-        samples = self.generate_samples(
-            sess, generator, self.GEN_BATCH_SIZE, self.SAMPLE_NUM)
-        #self.gen_loader.create_batches(samples)
-        self.mle_loader.create_batches(samples)
+        if self.LAMBDA != 0:
 
-        print('Start training discriminator...')
-        for i in tqdm(range(self.PRETRAIN_DIS_EPOCHS)):
-            print(' discriminator pre-train')
-            d_loss, acc = train_discriminator()
-        end = time.time()
-        print('Total time was {:.4f}s'.format(end - start))
-        return
+            if self.verbose:
+                print('DISCRIMINATOR PRETRAINING')
 
-    def print_rewards(self, rewards):
-        print('Rewards be like...')
-        np.set_printoptions(precision=3, suppress=True)
-        print(rewards)
-        mean_r, std_r = np.mean(rewards), np.std(rewards)
-        min_r, max_r = np.min(rewards), np.max(rewards)
-        print('Mean: {:.3f} , Std:  {:.3f}'.format(mean_r, std_r), end='')
-        print(', Min: {:.3f} , Max:  {:.3f}\n'.format(min_r, max_r))
-        np.set_printoptions(precision=8, suppress=False)
-        return
+            for i in tqdm(range(self.PRETRAIN_DIS_EPOCHS)):
 
-    def save_results(self, sess, folder, name, results_rows=None, nbatch=None):
-        if results_rows is not None:
-            df = pd.DataFrame(results_rows)
-            df.to_csv('{}_results.csv'.format(folder), index=False)
-        if nbatch is None:
-            label = 'final'
-        else:
-            label = str(nbatch)
+                negative_samples = self.generate_samples(self.POSITIVE_NUM)
+                dis_x_train, dis_y_train = self.dis_loader.load_train_data(
+                    self.positive_samples, negative_samples)
+                dis_batches = self.dis_loader.batch_iter(
+                    zip(dis_x_train, dis_y_train), self.DIS_BATCH_SIZE,
+                    self.PRETRAIN_DIS_EPOCHS)
 
-        # save models
-        model_saver = tf.train.Saver()
-        ckpt_dir = os.path.join(self.CHK_PATH, folder)
-        if not os.path.exists(ckpt_dir):
-            os.makedirs(ckpt_dir)
-        ckpt_file = os.path.join(
-            ckpt_dir, '{}_{}.ckpt'.format(name, label))
-        path = model_saver.save(sess, ckpt_file)
-        print('Model saved at {}'.format(path))
-        return
+                for batch in dis_batches:
+                    x_batch, y_batch = zip(*batch)
+                    feed = {
+                        self.discriminator.input_x: x_batch,
+                        self.discriminator.input_y: y_batch,
+                        self.discriminator.dropout_keep_prob: self.DIS_DROPOUT
+                    }
+                    _, step, loss, accuracy = self.sess.run(
+                        [self.dis_train_op, self.dis_global_step,
+                         self.discriminator.loss, self.discriminator.accuracy],
+                        feed)
 
-    def generate_samples(self, sess, trainable_model, batch_size, generated_num, verbose=False):
-        #  Generated Samples
+        self.PRETRAINED = True
+
+    def generate_samples(self, num):
+        """Generates molecules.
+
+        Arguments
+        -----------
+
+            - num. Integer representing the number of molecules
+
+        """
+
         generated_samples = []
-        start = time.time()
-        for _ in range(int(generated_num / batch_size)):
-            generated_samples.extend(trainable_model.generate(sess))
-        end = time.time()
-        if verbose:
-            print('Sample generation time: %f' % (end - start))
+
+        for _ in range(int(num / self.GEN_BATCH_SIZE)):
+            generated_samples.extend(self.generator.generate(self.sess))
+
         return generated_samples
 
-    def train_discriminator(self):
-        if self.LAMBDA == 0:
-            return 0, 0
-
-        negative_samples = self.generate_samples(
-            self.sess, self.generator, self.GEN_BATCH_SIZE, self.POSITIVE_NUM)
-
-        #  train discriminator
-        dis_x_train, dis_y_train = self.dis_loader.load_train_data(
-            self.positive_samples, negative_samples)
-        dis_batches = self.dis_loader.batch_iter(
-            zip(dis_x_train, dis_y_train), self.DIS_BATCH_SIZE, self.DIS_EPOCHS
-        )
-
-        for batch in dis_batches:
-            x_batch, y_batch = zip(*batch)
-            feed = {
-                self.discriminator.input_x: x_batch,
-                self.discriminator.input_y: y_batch,
-                self.discriminator.dropout_keep_prob: self.DIS_DROPOUT
-            }
-            _, step, loss, accuracy = self.sess.run(
-                [self.dis_train_op, self.dis_global_step, self.discriminator.loss, self.discriminator.accuracy], feed)
-        print('\tD loss  :   {}'.format(loss))
-        print('\tAccuracy: {}'.format(accuracy))
-        return loss, accuracy
-
     def train(self):
+        """Trains the model. If necessary, also includes pretraining."""
 
-        if not self.pretrain_is_loaded and not self.sess_is_loaded:
+        if not self.PRETRAINED and not self.SESS_LOADED:
+
             self.sess.run(tf.global_variables_initializer())
-            self.pretrain(self.sess, self.generator, self.train_discriminator)
+            self.pretrain()
+            #
+            #
+            # CHANGE THIS FOR CKPT_DIR
+            #
+            #
+            #
             ckpt_dir = 'checkpoints/{}_pretrain'.format(self.PREFIX)
             if not os.path.exists(ckpt_dir):
                 os.makedirs(ckpt_dir)
@@ -452,68 +589,153 @@ class ChemORGAN(object):
         if not hasattr(self, 'rollout'):
             self.rollout = Rollout(self.generator, 0.8, self.PAD_NUM)
 
-        print('#########################################################################')
-        print('Start Reinforcement Training Generator...')
+        # print('#########################################################################')
+        # print('Start Reinforcement Training Generator...')
         results_rows = []
         for nbatch in tqdm(range(self.TOTAL_BATCH)):
 
             results = OrderedDict({'exp_name': self.PREFIX})
-            batch_reward = self.make_reward(self.train_samples, nbatch)
 
-            print('* Making samples')
-            if nbatch % 10 == 0:
-                gen_samples = self.generate_samples(
-                    self.sess, self.generator, self.GEN_BATCH_SIZE, self.BIG_SAMPLE_NUM)
+            metric = self.EDUCATION[nbatch]
+
+            metrics = get_metrics()
+
+            if metric in metrics.keys():
+                reward_func = metrics[metric]
             else:
-                gen_samples = self.generate_samples(
-                    self.sess, self.generator, self.GEN_BATCH_SIZE, self.SAMPLE_NUM)
+                raise ValueError('objective {} not found!'.format(metric))
+
+            if self.kwargs[metric] is not None:
+
+                def batch_reward(samples):
+                    decoded = [mm.decode(sample, self.ord_dict)
+                               for sample in samples]
+                    pct_unique = len(list(set(decoded))) / float(len(decoded))
+                    rewards = reward_func(decoded, self.train_samples,
+                                          **self.kwargs[metric])
+                    weights = np.array([pct_unique /
+                                        float(decoded.count(sample))
+                                        for sample in decoded])
+
+                    return rewards * weights
+
+            else:
+
+                def batch_reward(samples):
+                    decoded = [mm.decode(sample, self.ord_dict)
+                               for sample in samples]
+                    pct_unique = len(list(set(decoded))) / float(len(decoded))
+                    rewards = reward_func(decoded, self.train_samples)
+                    weights = np.array([pct_unique /
+                                        float(decoded.count(sample))
+                                        for sample in decoded])
+
+                    return rewards * weights
+
+            ###################################
+
+            # print('* Making samples')
+            if nbatch % 10 == 0:
+                gen_samples = self.generate_samples(self.BIG_SAMPLE_NUM)
+            else:
+                gen_samples = self.generate_samples(self.SAMPLE_NUM)
             self.gen_loader.create_batches(gen_samples)
-            print('batch_num: {}'.format(nbatch))
+            # print('batch_num: {}'.format(nbatch))
             results['Batch'] = nbatch
 
             # results
             mm.compute_results(
                 gen_samples, self.train_samples, self.ord_dict, results)
 
-            print(
-                '#########################################################################')
-            print('-> Training generator with RL.')
-            print('G Epoch {}'.format(nbatch))
+            # print(
+            #     '#########################################################################')
+            # print('-> Training generator with RL.')
+            # print('G Epoch {}'.format(nbatch))
 
             for it in range(self.GEN_ITERATIONS):
                 samples = self.generator.generate(self.sess)
                 rewards = self.rollout.get_reward(
-                    self.sess, samples, 16, self.discriminator, batch_reward, self.LAMBDA)
+                    self.sess, samples, 16, self.discriminator,
+                    batch_reward, self.LAMBDA)
                 nll = self.generator.generator_step(
                     self.sess, samples, rewards)
                 # results
-                self.print_rewards(rewards)
-                print('neg-loglike: {}'.format(nll))
+
+                # print('Rewards be like...')
+                # np.set_printoptions(precision=3, suppress=True)
+                # print(rewards)
+                # mean_r, std_r = np.mean(rewards), np.std(rewards)
+                # min_r, max_r = np.min(rewards), np.max(rewards)
+                # print('Mean: {:.3f} , Std:  {:.3f}'.format(mean_r, std_r),
+                #       end='')
+                # print(', Min: {:.3f} , Max:  {:.3f}\n'.format(min_r, max_r))
+                # np.set_printoptions(precision=8, suppress=False)
+                # print('neg-loglike: {}'.format(nll))
+
                 results['neg-loglike'] = nll
             self.rollout.update_params()
 
             # generate for discriminator
-            print('-> Training Discriminator')
-            for i in range(self.D):
-                print('D_Epoch {}'.format(i))
-                d_loss, accuracy = self.train_discriminator()
-                results['D_loss_{}'.format(i)] = d_loss
-                results['Accuracy_{}'.format(i)] = accuracy
+            if self.LAMBDA != 0:
+                print('DISCRIMINATOR TRAINING')
+                for i in range(self.DIS_EPOCHS):
+                    print('D_Epoch {}'.format(i))
+
+                    negative_samples = self.generate_samples(self.POSITIVE_NUM)
+                    dis_x_train, dis_y_train = self.dis_loader.load_train_data(
+                        self.positive_samples, negative_samples)
+                    dis_batches = self.dis_loader.batch_iter(
+                        zip(dis_x_train, dis_y_train),
+                        self.DIS_BATCH_SIZE, self.DIS_EPOCHS
+                    )
+
+                    for batch in dis_batches:
+                        x_batch, y_batch = zip(*batch)
+                        feed = {
+                            self.discriminator.input_x: x_batch,
+                            self.discriminator.input_y: y_batch,
+                            self.discriminator.dropout_keep_prob:
+                                self.DIS_DROPOUT
+                        }
+                        _, step, d_loss, accuracy = self.sess.run(
+                            [self.dis_train_op, self.dis_global_step,
+                             self.discriminator.loss,
+                             self.discriminator.accuracy],
+                            feed)
+
+                    results['D_loss_{}'.format(i)] = d_loss
+                    results['Accuracy_{}'.format(i)] = accuracy
             print('results')
             results_rows.append(results)
-            if nbatch % self.EPOCH_SAVES == 0:
-                self.save_results(self.sess, self.PREFIX,
-                                  self.PREFIX + '_model', results_rows, nbatch)
+            if nbatch % self.EPOCH_SAVES == 0 or \
+               nbatch == self.TOTAL_BATCH - 1:
 
-        # write results
-        self.save_results(self.sess, self.PREFIX,
-                          self.PREFIX + '_model', results_rows)
+                if results_rows is not None:
+                    df = pd.DataFrame(results_rows)
+                    df.to_csv('{}_results.csv'.format(self.folder),
+                              index=False)
+                if nbatch is None:
+                    label = 'final'
+                else:
+                    label = str(nbatch)
 
-        print('\n:*** FINISHED ***')
+                # save models
+                model_saver = tf.train.Saver()
+                ckpt_dir = os.path.join(self.CHK_PATH, self.folder)
+                if not os.path.exists(ckpt_dir):
+                    os.makedirs(ckpt_dir)
+                ckpt_file = os.path.join(
+                    ckpt_dir, '{}_{}.ckpt'.format(self.PREFIX, label))
+                path = model_saver.save(self.sess, ckpt_file)
+                # print('Model saved at {}'.format(path))
+
+        print('\n######### FINISHED #########')
+
 
 if __name__ == '__main__':
 
-    model = ChemORGAN('load_test', params={'PRETRAIN_GEN_EPOCHS': 300, 'PRETRAIN_DIS_EPOCHS': 1})
+    model = ChemORGAN('load_test', params={'PRETRAIN_GEN_EPOCHS': 1,
+                                           'PRETRAIN_DIS_EPOCHS': 1})
     model.load_training_set('../data/toy.csv')
     model.load_prev_pretraining()
     model.set_training_program(['bandgap'], [1])
