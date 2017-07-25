@@ -1,9 +1,19 @@
 from __future__ import absolute_import, division, print_function
-from gpu_utils import pick_gpus_lowest_memory
+import os
+from gpu_utils import pick_gpu_lowest_memory
+try:
+    gpu_free_number = str(pick_gpu_lowest_memory())
+    os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
+    import tensorflow as tf
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    from keras import backend as K
+except Exception:
+    import tensorflow as tf
+    from keras import backend as K
 from builtins import range
 from collections import OrderedDict
 from generator import Generator, Rollout
-import os
 import numpy as np
 import tensorflow as tf
 import random
@@ -15,17 +25,17 @@ from tensorflow import logging
 from rdkit import rdBase
 import pandas as pd
 from tqdm import tqdm
-__version__ = '0.3.0'
+__version__ = '0.3.2'
 
 __logo__ = """
 ################################################################
-       ___ _                      ___                          
-     / __\ |__   ___ _ __ ___   /___\_ __ __ _  __ _ _ __     
-    / /  | '_ \ / _ \ '_ ` _ \ //  // '__/ _` |/ _` | '_ \    
-   / /___| | | |  __/ | | | | / \_//| | | (_| | (_| | | | |   
-   \____/|_| |_|\___|_| |_| |_\___/ |_|  \__, |\__,_|_| |_|   
-                                         |___/                
-                                              version {}     
+      ___ _                      ___
+     / __\ |__   ___ _ __ ___   /___\_ __ __ _  __ _ _ __
+    / /  | '_ \ / _ \ '_ ` _ \ //  // '__/ _` |/ _` | '_ \
+   / /___| | | |  __/ | | | | / \_//| | | (_| | (_| | | | |
+   \____/|_| |_|\___|_| |_| |_\___/ |_|  \__, |\__,_|_| |_|
+                                         |___/
+                                              version {}
 ################################################################\n\n\n\n"""
 
 
@@ -66,17 +76,6 @@ class ChemORGAN(object):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         logging.set_verbosity(logging.INFO)
         rdBase.DisableLog('rdApp.error')
-
-        # Detect GPU
-        self.config = tf.ConfigProto()
-        try:
-            gpu_free_number = str(pick_gpus_lowest_memory()[0, 0])
-            os.environ['CUDA_VISIBLE_DEVICES'] = '{}'.format(gpu_free_number)
-            print('GPUs {} detected and selected'.format(gpu_free_number))
-            self.config.gpu_options.allow_growth = True
-        except Exception:
-            print('No GPU detected')
-            pass
 
         # Set parameters
         self.PREFIX = name
