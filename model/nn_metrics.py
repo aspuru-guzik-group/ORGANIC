@@ -20,21 +20,30 @@ from keras_tqdm import TQDMCallback
 
 
 class KerasNN(object):
+    """
+    Class for handling Keras neural network models.
+    """
 
     def predict(self, smiles, batch_size=100):
         """
         Computes the predictions for a batch of molecules.
 
-        Arguments.
+        Arguments
+        -----------
 
             - smiles. Array or list containing the
-               SMILES representation of the molecules.
+            SMILES representation of the molecules.
 
-        Returns.
+            - batch_size. Optional. Size of the batch
+            used for computing the properties.
+
+        Returns
+        -----------
 
             A list containing the predictions.
 
         """
+
         with self.graph.as_default():
             input_x = self.computeFingerprints(smiles)
             return self.nn.predict(input_x, batch_size=batch_size)
@@ -43,27 +52,31 @@ class KerasNN(object):
         """
         Evaluates the accuracy of the method.
 
-        Arguments.
+        Arguments
+        -----------
 
             - train_x. Array or list containing the
-               SMILES representation of the molecules.
+            SMILES representation of the molecules.
             - train_y. The real values of the desired
-               properties.
+            properties.
 
-        Returns.
+        Returns
+        -----------
 
-            A list containing the predictions.
+            Test loss.
 
         """
+
         with self.graph.as_default():
             input_x = self.computeFingerprints(train_x)
             return self.nn.evaluate(input_x, train_y, verbose=0)
 
-    def train(self, train_x, train_y, batch_size, nepochs):
+    def train(self, train_x, train_y, batch_size, nepochs, earlystopping=True, min_delta=0.001):
         """
-        Trains the model.
+        Trains the model
 
-        Arguments.
+        Arguments
+        -----------
 
             - train_x. Array or list containing the
                SMILES representation of the molecules.
@@ -75,17 +88,23 @@ class KerasNN(object):
 
             - nepochs. The maximum number of epochs.
 
-        Returns.
+            - earlystopping. Boolean specifying whether early
+            stopping will be used or not. True by default.
 
-            A string containing the development of the
-            training program.
+            - min_delta. If earlystopping is True, the variation
+            on the validation set's value which will trigger
+            the stopping.
 
         """
+
         with self.graph.as_default():
             input_x = self.computeFingerprints(train_x)
-            callbacks = [EarlyStopping(monitor='val_loss', min_delta=0.01, patience=10, verbose=0, mode='auto'),
+            if earlystopping == True:
+                callbacks = [EarlyStopping(monitor='val_loss', min_delta=min_delta, patience=10, verbose=0, mode='auto'),
                          TQDMCallback()]
-            history = self.nn.fit(input_x, train_y,
+            else:
+                callbacks = [TQDMCallback()]
+            self.nn.fit(input_x, train_y,
                                   shuffle=True,
                                   epochs=nepochs,
                                   batch_size=batch_size,
@@ -93,17 +112,17 @@ class KerasNN(object):
                                   verbose=2,
                                   callbacks=callbacks)
 
-            return history
-
     def load(self, file):
         """
         Loads a previously trained model.
 
-        Arguments.d
+        Arguments
+        -----------
 
             - file. A string pointing to the .h5 file.
 
         """
+
         with self.graph.as_default():
             self.nn.load_weights(file, by_name=True)
 
@@ -111,12 +130,14 @@ class KerasNN(object):
         """
         Computes Morgan fingerprints 
 
-        Arguments.
+        Arguments
+        -----------
 
             - smiles. An array or list of molecules in 
                the SMILES codification.
 
-        Returns.
+        Returns
+        -----------
 
             A numpy array containing Morgan fingerprints
             bitvectors.
@@ -129,27 +150,44 @@ class KerasNN(object):
         return np.asarray(fps)
 
     def fingerprintToBitVect(self, fp):
-        return [float(i) for i in fp]
+        """
+        Transforms a Morgan fingerprint to a bit vector. 
+
+        Arguments
+        -----------
+
+            - fp. Morgan fingerprint
+
+        Returns
+        -----------
+
+            A bit vector.
+
+        """
+        return np.asarray([float(i) for i in fp])
 
 
 class CustomNN(KerasNN):
-
     """
     Class containing the methods for the ChemORGAN
     pre-trained neural network methods. 
 
-    Arguments:
-
-        - label. Identifies the property predicted
-           by the neural network.
-
-        - nBits. Refers to the number of bits in which
-           the Morgan fingerprints are encoded. By
-           default, 4096.
-
     """
 
     def __init__(self, label, nBits=4096):
+        """Initializes the model.
+
+        Arguments
+        -----------
+
+            - label. Identifies the property predicted
+               by the neural network.
+
+            - nBits. Refers to the number of bits in which
+               the Morgan fingerprints are encoded. By
+               default, 4096.
+
+        """
 
         self.nBits = nBits
         self.nn = self.model(self.nBits)
@@ -158,11 +196,13 @@ class CustomNN(KerasNN):
         """
         Generates a Keras DNN architecture.
 
-        Arguments:
+        Arguments
+        -----------
 
             - dim. The dimension of the input vector.
 
-        Returns:
+        Returns
+        -----------
 
             A keras.Sequential() object with the DNN 
             architecture.

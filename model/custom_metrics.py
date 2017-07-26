@@ -275,12 +275,14 @@ with a random sample of the other generated smiles.
 
 def batch_variety(smiles, train_smiles=None):
     filtered = filter_smiles(smiles)
-    mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(
-        filtered, int(len(filtered) / 10))]
-    setfps = [Chem.GetMorganFingerprintAsBitVect(
-        mol, 4, nBits=2048) for mol in mols]
-    vals = [apply_to_valid(s, variety, setfps=setfps) for s in smiles]
-    return vals
+    if filtered:
+        mols = [Chem.MolFromSmiles(smile) for smile in np.random.choice(filtered, int(len(filtered) / 10))]
+        setfps = [Chem.GetMorganFingerprintAsBitVect(
+            mol, 4, nBits=2048) for mol in mols]
+        vals = [apply_to_valid(s, variety, setfps=setfps) for s in smiles]
+        return vals
+    else:
+        return np.zeros(len(smiles))
 
 
 def variety(mol, setfps):
@@ -292,7 +294,9 @@ def variety(mol, setfps):
     if NORMALIZE:
         val = remap(mean_dist, low_rand_dst, mean_div_dst)
         val = np.clip(val, 0.0, 1.0)
-    return val
+        return val
+    else:
+        return mean_dist
 
 #
 # 2.4. Novelty
@@ -631,7 +635,7 @@ def load_NP(filename=None):
     NP_model = pickle.load(gzip.open(filename))
     return ('NP_model', NP_model)
 
-def NP_score(mol):
+def NP_score(mol, NP_model=None):
     fp = Chem.GetMorganFingerprint(mol, 2)
     bits = fp.GetNonzeroElements()
 

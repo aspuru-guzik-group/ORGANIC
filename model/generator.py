@@ -1,28 +1,62 @@
+"""
+
+GENERATOR
+====================
+
+Generator and Rollout models.
+
+This module is slightly modified from Gabriel Guimaraes and
+Benjamin Sanchez-Lengeling original implementation (which is
+also a slight modification from SeqGAN's model).
+
+Carlos Outeiral has handled some issues with the Rollout efficiency,
+removed duplicates, corrected bugs and added some documentation.
+"""
+
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
 
+
 class Generator(object):
+    """
+    Class for the generative model.
+    """
 
     def __init__(self, num_emb, batch_size, emb_dim, hidden_dim,
                  sequence_length, start_token,
-                 learning_rate=0.002, reward_gamma=0.95):
+                 learning_rate=0.001, reward_gamma=0.95,
+                 temperature=1.0, grad_clip=5.0):
+        """Sets parameters and defines the model architecture."""
 
+        """
+        Set specified parameters
+        """
         self.num_emb = num_emb
         self.batch_size = batch_size
         self.emb_dim = emb_dim
         self.hidden_dim = hidden_dim
         self.sequence_length = sequence_length
+        self.reward_gamma = reward_gamma
+        self.temperature = temperature
+        self.grad_clip = grad_clip
         self.start_token = tf.constant(
             [start_token] * self.batch_size, dtype=tf.int32)
         self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
-        self.reward_gamma = reward_gamma
-        self.g_params = []
-        self.d_params = []
-        self.temperature = 1.0
-        self.grad_clip = 5.0
-        self.expected_reward = tf.Variable(tf.zeros([self.sequence_length]))
 
+        """
+        Set important internal variables
+        """
+        self.g_params = []  # This list will be updated with LSTM's parameters
+        self.expected_reward = tf.Variable(tf.zeros([self.sequence_length]))
+        self.x = tf.placeholder(  # true data, not including start token
+            tf.int32, shape=[self.batch_size, self.sequence_length])
+        self.rewards = tf.placeholder(  # rom rollout policy and discriminator
+            tf.float32, shape=[self.batch_size, self.sequence_length])
+
+        """
+        Define generative model
+        """
         with tf.variable_scope('generator'):
             self.g_embeddings = tf.Variable(
                 self.init_matrix([self.num_emb, self.emb_dim]))
@@ -32,29 +66,29 @@ class Generator(object):
             self.g_output_unit = self.create_output_unit(
                 self.g_params)  # maps h_t to o_t (output token logits)
 
-        # placeholder definition
-        self.x = tf.placeholder(
-            tf.int32, shape=[self.batch_size, self.sequence_length])
-        # sequence of indices of true data, not including start token
-
-        self.rewards = tf.placeholder(
-            tf.float32, shape=[self.batch_size, self.sequence_length])
-        # get from rollout policy and discriminator
-
-        # processed for batch
+        """
+        Process the batches
+        """
         with tf.device("/cpu:0"):
             inputs = tf.split(axis=1, num_or_size_splits=self.sequence_length,
-                              value=tf.nn.embedding_lookup(self.g_embeddings, self.x))
-            self.processed_x = tf.stack(
-                [tf.squeeze(input_, [1]) for input_ in inputs])  # seq_length x batch_size x emb_dim
-
+                              value=tf.nn.embedding_lookup(self.g_embeddings,
+                                                           self.x))
+            self.processed_x = tf.stack(  # seq_length x batch_size x emb_dim
+                [tf.squeeze(input_, [1]) for input_ in inputs])
         self.h0 = tf.zeros([self.batch_size, self.hidden_dim])
         self.h0 = tf.stack([self.h0, self.h0])
 
-        gen_o = tensor_array_ops.TensorArray(dtype=tf.float32, size=self.sequence_length,
-                                             dynamic_size=False, infer_shape=True)
-        gen_x = tensor_array_ops.TensorArray(dtype=tf.int32, size=self.sequence_length,
-                                             dynamic_size=False, infer_shape=True)
+        """
+        Generative process
+        """
+        gen_o = tensor_array_ops.TensorArray(dtype=tf.float32,
+                                             size=self.sequence_length,
+                                             dynamic_size=False,
+                                             infer_shape=True)
+        gen_x = tensor_array_ops.TensorArray(dtype=tf.int32,
+                                             size=self.sequence_length,
+                                             dynamic_size=False,
+                                             infer_shape=True)
 
         def _g_recurrence(i, x_t, h_tm1, gen_o, gen_x):
             h_t = self.g_recurrent_unit(x_t, h_tm1)  # hidden_memory_tuple
@@ -73,13 +107,15 @@ class Generator(object):
             cond=lambda i, _1, _2, _3, _4: i < self.sequence_length,
             body=_g_recurrence,
             loop_vars=(tf.constant(0, dtype=tf.int32),
-                       tf.nn.embedding_lookup(self.g_embeddings, self.start_token), self.h0, gen_o, gen_x))
+                       tf.nn.embedding_lookup(self.g_embeddings, self.start_token),
+                       self.h0, gen_o, gen_x))
 
         self.gen_x = self.gen_x.stack()  # seq_length x batch_size
-        # batch_size x seq_length
-        self.gen_x = tf.transpose(self.gen_x, perm=[1, 0])
+        self.gen_x = tf.transpose(self.gen_x, perm=[1, 0]) # batch_size x seq_length
 
-        # supervised pretraining for generator
+        """
+        Pretraining
+        """
         g_predictions = tensor_array_ops.TensorArray(
             dtype=tf.float32, size=self.sequence_length,
             dynamic_size=False, infer_shape=True)
@@ -114,7 +150,6 @@ class Generator(object):
 
         self.g_logits = tf.transpose(
             self.g_logits.stack(), perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
-        # pretraining loss
         self.pretrain_loss = -tf.reduce_sum(
             tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
                 tf.clip_by_value(tf.reshape(self.g_predictions,
@@ -122,17 +157,15 @@ class Generator(object):
             )
         ) / (self.sequence_length * self.batch_size)
 
-        # training updates
-        pretrain_opt = self.g_optimizer(self.learning_rate)
-
+        pretrain_opt = self.g_optimizer(self.learning_rate)  # training updates
         self.pretrain_grad, _ = tf.clip_by_global_norm(
             tf.gradients(self.pretrain_loss, self.g_params), self.grad_clip)
         self.pretrain_updates = pretrain_opt.apply_gradients(
             zip(self.pretrain_grad, self.g_params))
 
-        #######################################################################
-        #  Unsupervised Training
-        #######################################################################
+        """
+        Unsupervised Training
+        """
         self.g_loss = -tf.reduce_sum(
             tf.reduce_sum(
                 tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
@@ -140,34 +173,39 @@ class Generator(object):
                         self.g_predictions, [-1, self.num_emb]), 1e-20, 1.0)
                 ), 1) * tf.reshape(self.rewards, [-1])
         )
-
         g_opt = self.g_optimizer(self.learning_rate)
-
         self.g_grad, _ = tf.clip_by_global_norm(
             tf.gradients(self.g_loss, self.g_params), self.grad_clip)
         self.g_updates = g_opt.apply_gradients(zip(self.g_grad, self.g_params))
 
     def generate(self, session):
+        """Generates a batch of samples."""
         outputs = session.run([self.gen_x])
         return outputs[0]
 
     def pretrain_step(self, session, x):
-        outputs = session.run([self.pretrain_updates, self.pretrain_loss, self.g_predictions],
-                              feed_dict={self.x: x})
+        """Performs a pretraining step on the generator."""
+        outputs = session.run([self.pretrain_updates, self.pretrain_loss,
+                               self.g_predictions], feed_dict={self.x: x})
         return outputs
 
     def generator_step(self, sess, samples, rewards):
+        """Performs a training step on the generator."""
         feed = {self.x: samples, self.rewards: rewards}
         _, g_loss = sess.run([self.g_updates, self.g_loss], feed_dict=feed)
         return g_loss
 
     def init_matrix(self, shape):
+        """Returns a normally initialized matrix of a given shape."""
         return tf.random_normal(shape, stddev=0.1)
 
     def init_vector(self, shape):
+        """Returns a vector of zeros of a given shape."""
         return tf.zeros(shape)
 
     def create_recurrent_unit(self, params):
+        """Defines the recurrent process in the LSTM."""
+
         # Weights and Bias for input and hidden tensor
         self.Wi = tf.Variable(self.init_matrix(
             [self.emb_dim, self.hidden_dim]))
@@ -236,6 +274,8 @@ class Generator(object):
         return unit
 
     def create_output_unit(self, params):
+        """Defines the output part of the LSTM."""
+
         self.Wo = tf.Variable(self.init_matrix(
             [self.hidden_dim, self.num_emb]))
         self.bo = tf.Variable(self.init_matrix([self.num_emb]))
@@ -251,16 +291,22 @@ class Generator(object):
         return unit
 
     def g_optimizer(self, *args, **kwargs):
-        return tf.train.AdamOptimizer(*args, **kwargs)  # ignore learning rate
+        """Sets the optimizer."""
+        return tf.train.AdamOptimizer(learning_rate=self.learning_rate,
+                                      *args, **kwargs)
 
 
 class Rollout(object):
+    """
+    Class for the rollout policy model.
+    """
 
     def __init__(self, lstm, update_rate, pad_num):
+        """Sets parameters and defines the model architecture."""
+
         self.lstm = lstm
         self.update_rate = update_rate
         self.pad_num = pad_num
-
         self.num_emb = self.lstm.num_emb
         self.batch_size = self.lstm.batch_size
         self.emb_dim = self.lstm.emb_dim
@@ -338,6 +384,7 @@ class Rollout(object):
         self.gen_x = tf.transpose(self.gen_x, perm=[1, 0])
 
     def get_reward(self, sess, input_x, rollout_num, cnn, reward_fn=None, D_weight=1):
+        """Calculates the rewards for a list of SMILES strings."""
 
         reward_weight = 1 - D_weight
         rewards = []
@@ -382,9 +429,9 @@ class Rollout(object):
                 if i == 0:
                     rewards.append(ypred)
                 else:
-                    rewards[given_num - 1] += ypred                
+                    rewards[given_num - 1] += ypred       
 
-            # the last char reward
+            # Last char reward
             feed = {cnn.input_x: input_x, cnn.dropout_keep_prob: 1.0}
             ypred_for_auc = sess.run(cnn.ypred_for_auc, feed)
             if reward_fn:
@@ -404,6 +451,8 @@ class Rollout(object):
         return rewards
 
     def create_recurrent_unit(self):
+        """Defines the recurrent process in the LSTM."""
+
         # Weights and Bias for input and hidden tensor
         self.Wi = tf.identity(self.lstm.Wi)
         self.Ui = tf.identity(self.lstm.Ui)
@@ -459,6 +508,9 @@ class Rollout(object):
         return unit
 
     def update_recurrent_unit(self):
+        """Updates the weights and biases of the rollout's LSTM
+        recurrent unit following the results of the training."""
+
         # Weights and Bias for input and hidden tensor
         self.Wi = self.update_rate * self.Wi + \
             (1 - self.update_rate) * tf.identity(self.lstm.Wi)
@@ -526,6 +578,8 @@ class Rollout(object):
         return unit
 
     def create_output_unit(self):
+        """Defines the output process in the LSTM."""
+
         self.Wo = tf.identity(self.lstm.Wo)
         self.bo = tf.identity(self.lstm.bo)
 
@@ -539,6 +593,9 @@ class Rollout(object):
         return unit
 
     def update_output_unit(self):
+        """Updates the weights and biases of the rollout's LSTM
+        output unit following the results of the training."""
+
         self.Wo = self.update_rate * self.Wo + \
             (1 - self.update_rate) * tf.identity(self.lstm.Wo)
         self.bo = self.update_rate * self.bo + \
@@ -554,6 +611,7 @@ class Rollout(object):
         return unit
 
     def update_params(self):
+        """Updates all parameters in the rollout's LSTM."""
         self.g_embeddings = tf.identity(self.lstm.g_embeddings)
         self.g_recurrent_unit = self.update_recurrent_unit()
         self.g_output_unit = self.update_output_unit()

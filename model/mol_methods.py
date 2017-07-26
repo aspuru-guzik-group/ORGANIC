@@ -1,3 +1,18 @@
+"""
+
+MOL METHODS
+====================
+
+Compendium of methods for SMILES parsing and molecular metrics handling.
+
+This module is mainly a reorganization of Gabriel Guimaraes and Benjamin
+Sanchez-Lengeling's original implementation (http://github.com/gablg1/ORGAN).
+
+Carlos Outeiral has cleaned up and documented the code, as well
+as added a few functions and modified the I/O part. Benjamin Sanchez-Lengeling
+has added new mathematical utilities.
+"""
+
 from __future__ import absolute_import, division, print_function
 import os
 import csv
@@ -5,9 +20,16 @@ import numpy as np
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import MolFromSmiles, MolToSmiles
 
+""" DATA I/O """
+
+
 def read_smi(filename):
-    """
-    Function to read a .smi file.
+    """Reads SMILES from a .smi file.
+
+    Arguments
+    -----------
+
+        - filename. String pointing to the .smi file.
 
     """
 
@@ -16,8 +38,36 @@ def read_smi(filename):
     smiles = [i.strip() for i in smiles]
     return smiles
 
+def read_smiles_csv(filename):
+    """Reads SMILES from a .csv file
+
+    Arguments
+    -----------
+
+        - filename. String pointing to the .csv file.
+
+    Note
+    -----------
+        
+        This function will assume that the SMILES are
+        in column 0.
+
+    """
+    with open(filename) as file:
+        reader = csv.reader(file)
+        smiles_idx = next(reader).index("smiles")
+        data = [row[smiles_idx] for row in reader]
+    return data
 
 def load_train_data(filename):
+    """Loads training data from a .csv or .smi file
+
+    Arguments
+    -----------
+
+        - filename. String pointing to the .csv or .smi file.
+
+    """
     ext = filename.split(".")[-1]
     if ext == 'csv':
         return read_smiles_csv(filename)
@@ -27,17 +77,17 @@ def load_train_data(filename):
         raise ValueError('data is not smi or csv!')
     return
 
-
-def read_smiles_csv(filename):
-    # Assumes smiles is in column 0
-    with open(filename) as file:
-        reader = csv.reader(file)
-        smiles_idx = next(reader).index("smiles")
-        data = [row[smiles_idx] for row in reader]
-    return data
-
-
 def save_smi(name, smiles):
+    """Saves SMILES data as a .smi file.
+
+    Arguments
+    -----------
+
+        - filename. String pointing to the .smi file.
+
+        - smiles. List of SMILES strings to be saved.
+
+    """
     if not os.path.exists('epoch_data'):
         os.makedirs('epoch_data')
     smi_file = os.path.join('epoch_data', "{}.smi".format(name))
@@ -45,17 +95,44 @@ def save_smi(name, smiles):
         afile.write('\n'.join(smiles))
     return
 
-
-#
-# 1.3. Math utilities
-#
-
+""" MATHEMATICAL UTILITIES """
 
 def gauss_remap(x, x_mean, x_std):
+    """Remaps a given value to a gaussian distribution.
+
+    Arguments
+    -----------
+
+        - x. Value to be remapped.
+
+        - x_mean. Mean of the distribution.
+
+        - x_std. Standard deviation of the distribution.
+
+    """
+
     return np.exp(-(x - x_mean)**2 / (x_std**2))
 
-
 def remap(x, x_min, x_max):
+    """Remaps a given value to [0, 1].
+
+    Arguments
+    -----------
+
+        - x. Value to be remapped.
+
+        - x_min. Minimum value (will correspond to 0).
+
+        - x_max. Maximum value (will correspond to 1).
+
+    Note
+    -----------
+
+        If x > x_max or x < x_min, the value will be outside
+        of the [0, 1] interval. 
+
+    """
+
     if x_max != 0 and x_min != 0:
         return 0
     elif x_max - x_min == 0:
@@ -64,13 +141,15 @@ def remap(x, x_min, x_max):
         return (x - x_min) / (x_max - x_min)
 
 def constant_range(x, x_low, x_high):
+
     if hasattr(x, "__len__"):
         return np.array([constant_range_func(xi, x_low, x_high) for xi in x])
     else:
         return constant_range_func(x, x_low, x_high)
 
-
 def constant_range_func(x, x_low, x_high):
+    """Returns 1 if x is in [x_low, x_high] and 0 if not."""
+
     if x <= x_low or x >= x_high:
         return 0
     else:
@@ -118,33 +197,56 @@ def pct(a, b):
         return 0
     return float(len(a)) / len(b)
 
-#
-# 1.4. Encoding/decoding utilities
-#
-
+"""Encoding/decoding utilities"""
 
 def canon_smile(smile):
+    """Transforms to canonic SMILES"""
     return MolToSmiles(MolFromSmiles(smile))
 
-
 def verified_and_below(smile, max_len):
+    """Returns True if the SMILES string is valid and
+    its length is less than max_len."""
     return len(smile) < max_len and verify_sequence(smile)
 
-
 def verify_sequence(smile):
+    """Returns True if the SMILES string is valid and
+    its length is less than max_len."""
     mol = Chem.MolFromSmiles(smile)
     return smile != '' and mol is not None and mol.GetNumAtoms() > 1
 
 def apply_to_valid(smile, fun, **kwargs):
+    """Returns fun(smile, **kwargs) if smiles is a valid
+    SMILES string, and 0.0 otherwise."""
     mol = Chem.MolFromSmiles(smile)
     return fun(mol, **kwargs) if smile != '' and mol is not None and mol.GetNumAtoms() > 1 else 0.0
 
-
 def filter_smiles(smiles):
+    """Filters out valid SMILES string from a list."""
     return [smile for smile in smiles if verify_sequence(smile)]
 
-
 def build_vocab(smiles, pad_char='_', start_char='^'):
+    """Builds the vocabulary dictionaries.
+
+    Arguments
+    -----------
+
+        - smiles. List of SMILES.
+
+        - pad_char. Char used for padding. '_' by default.
+
+        - start_char. First char of every generated string.
+        '^' by default.
+
+    Returns
+    -----------
+        
+        - char_dict. Dictionary which maps a given character
+        to a number
+
+        - ord_dict. Dictionary which maps a given number to a
+        character.
+
+    """
     i = 1
     char_dict, ord_dict = {start_char: 0}, {0: start_char}
     for smile in smiles:
@@ -156,40 +258,26 @@ def build_vocab(smiles, pad_char='_', start_char='^'):
     char_dict[pad_char], ord_dict[i] = i, pad_char
     return char_dict, ord_dict
 
-
 def pad(smile, n, pad_char='_'):
+    """Adds the padding char (by default '_') to a string
+    until it is of n length"""
     if n < len(smile):
         return smile
     return smile + pad_char * (n - len(smile))
 
+def unpad(smile, pad_char='_'): 
+    """Removes the padding of a string"""
+    return smile.rstrip(pad_char)
 
-def unpad(smile, pad_char='_'): return smile.rstrip(pad_char)
+def encode(smile, max_len, char_dict): 
+    """Encodes a SMILES string using the previously built
+    vocabulary."""
+    return [char_dict[c] for c in pad(smile, max_len)]
 
-
-def encode(smile, max_len, char_dict): return [
-    char_dict[c] for c in pad(smile, max_len)]
-
-
-def decode(ords, ord_dict): return unpad(
-    ''.join([ord_dict[o] for o in ords]))
-
-
-def print_params(p):
-    print('Using parameters:')
-    if (type(p['TOTAL_BATCH']) is list) or (type(p['OBJECTIVE']) is list):
-        for key, value in p.items():
-            if key == 'OBJECTIVE' or key == 'TOTAL_BATCH':
-                print('{:20s}'.format(key))
-                for each in value:
-                    print('     {}'.format(each))
-            else:
-                print('{:20s} - {:12}'.format(key, value))
-    else:
-        for key, value in p.items():
-            print('{:20s} - {:12}'.format(key, value))
-    print('rest of parameters are set as default\n')
-    return
-
+def decode(ords, ord_dict): 
+    """Decodes a SMILES string using the previously built
+    vocabulary."""
+    return unpad(''.join([ord_dict[o] for o in ords]))
 
 def compute_results(model_samples, train_data, ord_dict, results={}, verbose=True):
     samples = [decode(s, ord_dict) for s in model_samples]
@@ -224,9 +312,6 @@ def compute_results(model_samples, train_data, ord_dict, results={}, verbose=Tru
         # print_results(verified_samples, unverified_samples, metrics, results)
         print_results(verified_samples, unverified_samples, results)
     return
-
-# def print_results(verified_samples, unverified_samples, metrics, results={}):
-
 
 def print_results(verified_samples, unverified_samples, results={}):
     print('~~~ Summary Results ~~~')

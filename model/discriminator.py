@@ -1,13 +1,23 @@
-# This code is mainly borrowed from
-# https://github.com/dennybritz/cnn-text-classification-tf
+"""
+
+DISCRIMINATOR
+====================
+
+This module is left barely untouched from Gabriel Guimaraes and
+Benjamin Sanchez-Lengeling original implementation 
+(http://github.com/gablg1/ORGAN).
+
+The code was initially borrowed from the following two sources:
+
+    https://github.com/dennybritz/cnn-text-classification-tf  (CNN)
+    https://github.com/carpedm20/lstm-char-cnn-tensorflow     (Highway)
+
+"""
 
 import tensorflow as tf
 from builtins import range
 from tensorflow.contrib.rnn.python.ops import core_rnn_cell_impl
 
-
-# highway layer that borrowed from
-# https://github.com/carpedm20/lstm-char-cnn-tensorflow
 def highway(input_, size, layer_size=1, bias=-2, f=tf.nn.relu):
     """Highway Network (cf. http://arxiv.org/abs/1505.00387).
 
@@ -28,7 +38,6 @@ def highway(input_, size, layer_size=1, bias=-2, f=tf.nn.relu):
         output = transform_gate * output + carry_gate * input_
 
     return output
-
 
 class Discriminator(object):
     """

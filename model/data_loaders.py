@@ -1,3 +1,19 @@
+"""
+
+DATA LOADERS
+====================
+
+This module is only a reorganization of Gabriel Guimaraes' original
+implementation (http://github.com/gablg1/ORGAN). Carlos Outeiral has
+only added documentation.
+
+The code was initially borrowed from the SeqGAN code:
+
+    https://github.com/LantaoYu/SeqGAN
+    
+"""
+
+
 import numpy as np
 from re import compile as _Re
 

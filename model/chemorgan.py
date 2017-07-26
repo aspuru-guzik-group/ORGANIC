@@ -1,3 +1,19 @@
+"""
+      ___ _                      ___
+     / __\ |__   ___ _ __ ___   /___\_ __ __ _  __ _ _ __
+    / /  | '_ \ / _ \ '_ ` _ \ //  // '__/ _` |/ _` | '_ \
+   / /___| | | |  __/ | | | | / \_//| | | (_| | (_| | | | |
+   \____/|_| |_|\___|_| |_| |_\___/ |_|  \__, |\__,_|_| |_|
+                                         |___/
+
+================================================================
+
+ChemORGAN is a
+
+"""
+
+
+
 from __future__ import absolute_import, division, print_function
 import os
 from gpu_utils import pick_gpu_lowest_memory
@@ -44,7 +60,7 @@ class ChemORGAN(object):
     and the backend is performed.
     """
 
-    def __init__(self, name, params=None, use_gpu=True, verbose=True):
+    def __init__(self, name, params={}, use_gpu=True, verbose=True):
         """Parameter initialization.
 
         Arguments
@@ -76,6 +92,10 @@ class ChemORGAN(object):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         logging.set_verbosity(logging.INFO)
         rdBase.DisableLog('rdApp.error')
+
+        # Set configuration for GPU
+        self.config = tf.ConfigProto()
+        self.config.gpu_options.allow_growth = True
 
         # Set parameters
         self.PREFIX = name
@@ -189,8 +209,12 @@ class ChemORGAN(object):
         else:
             self.DIS_L2REG = 0.2
 
+        self.AV_METRICS = get_metrics()
+        self.LOADINGS = metrics_loading()
+
         self.PRETRAINED = False
         self.SESS_LOADED = False
+        self.USERDEF_METRIC = False
 
     def load_training_set(self, file):
         """Specifies a training set for the model. It also finishes
@@ -288,6 +312,78 @@ class ChemORGAN(object):
         self.sess = tf.Session(config=self.config)
         self.folder = 'checkpoints/{}'.format(self.PREFIX)
 
+    def define_metric(self, name, metric, load_metric=lambda *args: None):
+        """Sets up a new metric.
+
+        Arguments
+        -----------
+
+            - name. String used to identify the metric.
+
+            - metric. Function taking as argument a SMILES
+            string and returning a float value.
+
+            - load_metric. Optional. Preprocessing needed
+            at the beginning of the code.
+
+        Notes
+        -----------
+
+            - For combinations of already existing metrics, check
+            the define_metric_as_combination method.
+
+            - For metrics based in neural networks or gaussian
+            processes, please check our more specific functions
+            define_nn_metric and define_gp_metric.
+
+            - Check the mol_methods module for useful processing
+            options, and the custom_metrics module for examples
+            of how metrics are defined in ChemORGAN.
+
+    """
+
+        self.AV_METRICS[name] = metric
+        self.LOADINGS[name] = load_metric
+
+        if self.verbose:
+            print('Defined metric {}'.format(name))
+
+    def define_metric_as_combination(self, name, metrics, ponderations):
+        """Sets up a metric made from a combination of
+        previously existing metrics.
+
+        Arguments
+        -----------
+
+            - name. String used to identify the metric.
+
+            - metrics. List containing the name identifiers
+            of every metric in the list
+
+            - ponderations. List of ponderation coefficients
+            for every metric in the previous list.
+
+    """
+
+        funs = [self.AV_METRICS[metric] for metric in metrics]
+        funs_load = [self.LOADINGS[metric] for metric in metrics]
+
+        def metric(smiles, train_smiles=None, **kwargs):
+            vals = np.zeros(len(smiles))
+            for fun, c in zip(funs, ponderations):
+                vals += [c * mm.apply_to_valid(s, fun, **kwargs)
+                             for s in smiles]
+            return vals
+
+        def load_metric():
+            return [fun() for fun in funs_load if fun() is not None]
+
+        self.AV_METRICS[name] = metric
+        self.LOADINGS[name] = load_metric
+
+        if self.verbose:
+            print('Defined metric {}'.format(name))
+
     def set_training_program(self, metrics=None, steps=None):
         """Sets a program of metrics and epochs
         for training the model and generating molecules.
@@ -346,10 +442,9 @@ class ChemORGAN(object):
         met = list(set(self.METRICS))
 
         # Execute the metrics loading
-        loadings = metrics_loading()
         self.kwargs = {}
         for m in met:
-            load_fun = loadings[m]
+            load_fun = self.LOADINGS[m]
             args = load_fun()
             if args is not None:
                 if isinstance(args, tuple):
@@ -597,10 +692,8 @@ class ChemORGAN(object):
 
             metric = self.EDUCATION[nbatch]
 
-            metrics = get_metrics()
-
-            if metric in metrics.keys():
-                reward_func = metrics[metric]
+            if metric in self.AV_METRICS.keys():
+                reward_func = self.AV_METRICS[metric]
             else:
                 raise ValueError('objective {} not found!'.format(metric))
 
@@ -733,10 +826,16 @@ class ChemORGAN(object):
 
 if __name__ == '__main__':
 
-    model = ChemORGAN('load_test', params={'PRETRAIN_GEN_EPOCHS': 1,
-                                           'PRETRAIN_DIS_EPOCHS': 1})
+    def batch_validity(smiles, train_smiles=None):
+        vals = [1.0 if mm.verify_sequence(s) else 0.0 for s in smiles]
+        return vals
+
+    model = ChemORGAN('metrics', params={'PRETRAIN_GEN_EPOCHS': 50, 
+                                         'PRETRAIN_DIS_EPOCHS': 10,
+                                         'BIG_SAMPLE_NUM': 6400})
     model.load_training_set('../data/toy.csv')
     model.load_prev_pretraining()
-    model.set_training_program(['bandgap'], [1])
+    model.define_metric_as_combination('val', ['validity', 'chemical_beauty'], [0.5, 0.5])
+    model.set_training_program(['val'], [1])
     model.load_metrics()
     model.train()
