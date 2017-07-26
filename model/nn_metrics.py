@@ -1,3 +1,14 @@
+"""
+
+NN METRICS
+====================
+
+Support for metrics based in neural networks.
+To date, it includes support for Keras models.
+
+This module has been created by Carlos Outeiral.
+"""
+
 import numpy as np
 import rdkit.Chem.AllChem as Chem
 import tensorflow as tf
@@ -8,7 +19,7 @@ from keras.callbacks import EarlyStopping
 from keras_tqdm import TQDMCallback
 
 
-class NN(object):
+class KerasNN(object):
 
     def predict(self, smiles, batch_size=100):
         """
@@ -66,7 +77,7 @@ class NN(object):
 
         Returns.
 
-            A string containing the development of the 
+            A string containing the development of the
             training program.
 
         """
@@ -121,7 +132,7 @@ class NN(object):
         return [float(i) for i in fp]
 
 
-class CustomNN(NN):
+class CustomNN(KerasNN):
 
     """
     Class containing the methods for the ChemORGAN

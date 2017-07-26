@@ -1,9 +1,15 @@
 """
-Nvidia-smi GPU memory parsing.
 
-This module was created by Dennis Sheberla, and
-tested on nvidia-smi 370.23.
+GPU_UTILS
+====================
 
+Nvidia-smi GPU memory parsing. Tested in nvidia-smi 370.23
+
+The code is borrowed from Yaroslav Bulatov's post in Stack Overflow:
+
+https://stackoverflow.com/questions/41634674/tensorflow-on-shared-gpus-how-to-automatically-select-the-one-that-is-unused/41638727#41638727
+
+We thank Dennis Sheberla for directing us towards this code.
 """
 
 import subprocess
