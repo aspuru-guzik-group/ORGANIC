@@ -312,7 +312,8 @@ class ChemORGAN(object):
         self.sess = tf.Session(config=self.config)
         self.folder = 'checkpoints/{}'.format(self.PREFIX)
 
-    def define_metric(self, name, metric, load_metric=lambda *args: None):
+    def define_metric(self, name, metric, load_metric=lambda *args: None,
+                      pre_batch=False, pre_metric=lambda *args: None):
         """Sets up a new metric.
 
         Arguments
@@ -325,6 +326,13 @@ class ChemORGAN(object):
 
             - load_metric. Optional. Preprocessing needed
             at the beginning of the code.
+
+            - pre_batch. Optional. Boolean specifying whether
+            there is any preprocessing when the metric is applied
+            to a batch of smiles. False by default.
+
+            - pre_metric. Optional. Preprocessing operations
+            for the metric. Will be ignored if pre_batch is False.
 
         Notes
         -----------
@@ -340,9 +348,19 @@ class ChemORGAN(object):
             options, and the custom_metrics module for examples
             of how metrics are defined in ChemORGAN.
 
-    """
+        """
 
-        self.AV_METRICS[name] = metric
+        if pre_batch:
+            def batch_metric(smiles, train_smiles=None):
+                psmiles = pre_metric()
+                vals = [mm.apply_to_valid(s, metric) for s in psmiles]
+                return vals
+        else:
+            def batch_metric(smiles, train_smiles=None):
+                vals = [mm.apply_to_valid(s, metric) for s in smiles]
+                return vals
+
+        self.AV_METRICS[name] = batch_metric
         self.LOADINGS[name] = load_metric
 
         if self.verbose:
@@ -363,7 +381,7 @@ class ChemORGAN(object):
             - ponderations. List of ponderation coefficients
             for every metric in the previous list.
 
-    """
+        """
 
         funs = [self.AV_METRICS[metric] for metric in metrics]
         funs_load = [self.LOADINGS[metric] for metric in metrics]
@@ -371,8 +389,7 @@ class ChemORGAN(object):
         def metric(smiles, train_smiles=None, **kwargs):
             vals = np.zeros(len(smiles))
             for fun, c in zip(funs, ponderations):
-                vals += [c * mm.apply_to_valid(s, fun, **kwargs)
-                             for s in smiles]
+                vals += c * np.asarray(fun(smiles))
             return vals
 
         def load_metric():
@@ -380,6 +397,39 @@ class ChemORGAN(object):
 
         self.AV_METRICS[name] = metric
         self.LOADINGS[name] = load_metric
+
+        if self.verbose:
+            print('Defined metric {}'.format(name))
+
+    def define_metric_as_remap(self, name, metric, remapping):
+        """Sets up a metric made from a remapping of a
+        previously existing metric.
+
+        Arguments
+        -----------
+
+            - name. String used to identify the metric.
+
+            - metric. String identifying the previous metric.
+
+            - remapping. Remap function.
+
+        Note
+        -----------
+
+            Use of the mathematical remappings provided in the
+            mol_methods module is highly recommended.
+
+        """
+
+        pmetric = self.AV_METRICS[metric]
+
+        def nmetric(smiles, train_smiles=None, **kwargs):
+            vals = pmetric(smiles, train_smiles, **kwargs)
+            return remapping(vals)
+
+        self.AV_METRICS[name] = nmetric
+        self.LOADINGS[name] = self.LOADINGS[metric]
 
         if self.verbose:
             print('Defined metric {}'.format(name))
@@ -826,16 +876,24 @@ class ChemORGAN(object):
 
 if __name__ == '__main__':
 
-    def batch_validity(smiles, train_smiles=None):
-        vals = [1.0 if mm.verify_sequence(s) else 0.0 for s in smiles]
-        return vals
+    def RedoxRemap(vals):
+        first = mm.constant_range(vals, -0.1, 0.2)
+        second = mm.constant_range(vals, 0.9, 1.3)
+        return first + second
 
-    model = ChemORGAN('metrics', params={'PRETRAIN_GEN_EPOCHS': 50, 
+    def MichaelRemap(vals):
+        return mm.asym_rectification(vals, 0.0, rec_right=True)
+
+    def HydRemap(vals):
+        return mm.asym_rectification(vals, 0.1, rec_right=True)
+
+    # Setup model
+    model = ChemORGAN('metrics', params={'PRETRAIN_GEN_EPOCHS': 50,
                                          'PRETRAIN_DIS_EPOCHS': 10,
-                                         'BIG_SAMPLE_NUM': 6400})
+                                         'BIG_SAMPLE_NUM': 64})
     model.load_training_set('../data/toy.csv')
     model.load_prev_pretraining()
-    model.define_metric_as_combination('val', ['validity', 'chemical_beauty'], [0.5, 0.5])
-    model.set_training_program(['val'], [1])
+    model.define_metric_as_remap('DannyRedox', 'Redox', RedoxRemap)
+    model.set_training_program(['DannyRedox'], [1])
     model.load_metrics()
     model.train()
