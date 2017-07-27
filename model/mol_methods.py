@@ -16,6 +16,7 @@ has added new mathematical utilities.
 from __future__ import absolute_import, division, print_function
 import os
 import csv
+import collections
 import numpy as np
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import MolFromSmiles, MolToSmiles
@@ -97,6 +98,16 @@ def save_smi(name, smiles):
 
 """ MATHEMATICAL UTILITIES """
 
+def checkarray(x):
+
+    if type(x) == np.ndarray or isinstance(x, collections.Sequence):
+        if x.size == 1:
+            return False
+        else:
+            return True
+    else:
+        return False
+
 def gauss_remap(x, x_mean, x_std):
     """Remaps a given value to a gaussian distribution.
 
@@ -142,7 +153,7 @@ def remap(x, x_min, x_max):
 
 def constant_range(x, x_low, x_high):
 
-    if hasattr(x, "__len__"):
+    if checkarray(x):
         return np.array([constant_range_func(xi, x_low, x_high) for xi in x])
     else:
         return constant_range_func(x, x_low, x_high)
@@ -166,14 +177,14 @@ def constant_bump_func(x, x_low, x_high, decay=0.025):
 
 
 def constant_bump(x, x_low, x_high, decay=0.025):
-    if hasattr(x, "__len__"):
+    if checkarray(x):
         return np.array([constant_bump_func(xi, x_low, x_high, decay) for xi in x])
     else:
         return constant_bump_func(x, x_low, x_high, decay)
 
 
 def smooth_plateau(x, x_point, decay=0.025, increase=True):
-    if hasattr(x, "__len__"):
+    if checkarray(x):
         return np.array([smooth_plateau_func(xi, x_point, decay, increase) for xi in x])
     else:
         return smooth_plateau_func(x, x_point, decay, increase)
@@ -196,6 +207,46 @@ def pct(a, b):
     if len(b) == 0:
         return 0
     return float(len(a)) / len(b)
+
+def rectification(x, x_low, x_high, reverse=False):
+
+    if checkarray(x):
+        return np.array([rec_fun(xi, x_low, x_high, reverse) for xi in x])
+    else:
+        return rec_fun(x, x_low, x_high, reverse)
+
+def rec_fun(x, x_low, x_high, reverse=False):
+    if reverse == True:
+        if x_low <= x <= x_high:
+            return 0
+        else:
+            return x
+    else:
+        if x_low <= x <= x_high:
+            return x
+        else:
+            return 0
+
+def asym_rectification(x, x_low, x_high, reverse=False):
+
+    if checkarray(x):
+        return np.array([asymrec_fun(xi, x_low, x_high, reverse) for xi in x])
+    else:
+        return asymrec_fun(x, x_low, x_high, reverse)
+
+def asymrec_fun(x, y, rec_right=False):
+    if rec_right == True:
+        if x < y:
+            return x
+        else:
+            return 0
+    else:
+        if x < y:
+            return 0
+        else:
+            return x
+
+
 
 """Encoding/decoding utilities"""
 
