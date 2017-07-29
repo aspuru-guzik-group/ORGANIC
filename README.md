@@ -21,6 +21,7 @@ And, it is done!
 - future==0.16.0
 - rdkit
 - keras
+- GPmol
 - numpy
 - scipy
 - pandas
