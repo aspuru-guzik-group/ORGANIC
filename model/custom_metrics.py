@@ -685,7 +685,7 @@ def batch_PCE(smiles, train_smiles=None, cnn=None):
     return remap(vals, np.amin(vals), np.amax(vals))
 
 def load_PCE():
-    cnn_pce = CustomNN('pce')
+    cnn_pce = KerasNN('pce')
     cnn_pce.load('./neuralnets/pce.h5')
     return ('cnn', cnn_pce)
 
@@ -719,7 +719,7 @@ def batch_bandgap(smiles, train_smiles=None, cnn=None):
     return remap(vals, np.amin(vals), np.amax(vals))
 
 def load_bandgap():
-    cnn_bandgap = CustomNN('bandgap')
+    cnn_bandgap = KerasNN('bandgap')
     cnn_bandgap.load('./neuralnets/bandgap.h5')
     return ('cnn', cnn_bandgap)
 
@@ -899,18 +899,80 @@ def batch_mp(smiles, train_smiles=None, cnn=None):
     return remap(vals, np.amin(vals), np.amax(vals))
 
 def load_mp():
-    cnn_mp = CustomNN('mp')
+    cnn_mp = KerasNN('mp')
     cnn_mp.load('./neuralnets/mp.h5')
     return ('cnn', cnn_mp)
 
-############################################
-#
+
+# DANNY
+def batch_Redox(smiles, train_smiles=None, cnn=None):
+    if cnn is None:
+        raise ValueError('Redox not properly loaded.')
+    fsmiles = []
+    zeroindex = []
+    for k, sm in enumerate(smiles):
+        if verify_sequence(sm):
+            fsmiles.append(sm)
+        else:
+            fsmiles.append('c1ccccc1')
+            zeroindex.append(k)
+    vals = np.asarray(cnn.predict(fsmiles))
+    for k in zeroindex:
+        vals[k] = 0.0
+    vals = np.squeeze(np.stack(vals, axis=1))
+    return vals
+
+def load_Redox():
+    cnn_Redox = KerasNN('Redox', nBits=8192)
+    cnn_Redox.load('./neuralnets/redox.h5')
+    return ('cnn', cnn_Redox)
+
+def batch_Michael(smiles, train_smiles=None, cnn=None):
+    if cnn is None:
+        raise ValueError('Michael not properly loaded.')
+    fsmiles = []
+    zeroindex = []
+    for k, sm in enumerate(smiles):
+        if verify_sequence(sm):
+            fsmiles.append(sm)
+        else:
+            fsmiles.append('c1ccccc1')
+            zeroindex.append(k)
+    vals = np.asarray(cnn.predict(fsmiles))
+    for k in zeroindex:
+        vals[k] = 0.0
+    vals = np.squeeze(np.stack(vals, axis=1))
+    return vals
+
+def load_Michael():
+    cnn_Michael = KerasNN('Michael', nBits=8192)
+    cnn_Michael.load('./neuralnets/michael.h5')
+    return ('cnn', cnn_Michael)
+
+def batch_Hyd(smiles, train_smiles=None, cnn=None):
+    if cnn is None:
+        raise ValueError('Hyd not properly loaded.')
+    fsmiles = []
+    zeroindex = []
+    for k, sm in enumerate(smiles):
+        if verify_sequence(sm):
+            fsmiles.append(sm)
+        else:
+            fsmiles.append('c1ccccc1')
+            zeroindex.append(k)
+    vals = np.asarray(cnn.predict(fsmiles))
+    for k in zeroindex:
+        vals[k] = 0.0
+    vals = np.squeeze(np.stack(vals, axis=1))
+    return vals
+
+def load_Hyd():
+    cnn_Hyd = KerasNN('Hyd', nBits=8192)
+    cnn_Hyd.load('./neuralnets/hyd.h5')
+    return ('cnn', cnn_Hyd)
+
+
 #   3. LOAD ALL REWARDS
-#
-#############################################
-#
-#
-#
 
 def metrics_loading():
 
@@ -939,6 +1001,9 @@ def metrics_loading():
     load['substructure_match_any'] = load_substructure_match_any
     load['substructure_absence'] = load_substructure_absence
     load['chemical_beauty'] = lambda *args: None
+    load['Redox'] = load_Redox
+    load['Michael'] = load_Michael
+    load['Hyd'] = load_Hyd
 
     return load
 
@@ -966,5 +1031,8 @@ def get_metrics():
     metrics['substructure_match_any'] = batch_substructure_match_any
     metrics['substructure_absence'] = batch_substructure_absence
     metrics['chemical_beauty'] = batch_beauty
+    metrics['Redox'] = batch_Redox
+    metrics['Michael'] = batch_Michael
+    metrics['Hyd'] = batch_Hyd
 
     return metrics
