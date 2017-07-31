@@ -9,22 +9,24 @@ The code is borrowed from Yaroslav Bulatov's post in Stack Overflow:
 
 https://stackoverflow.com/questions/41634674/tensorflow-on-shared-gpus-how-to-automatically-select-the-one-that-is-unused/41638727#41638727
 
-We thank Dennis Sheberla for directing us towards this code.
+We thank Dennis Sheberla for telling us of its existence.
 """
 
 import subprocess
 import re
 
-
 def run_command(cmd):
-    """Run command, return output as string."""
+    """
+    Run command, return output as string.
+    """
     output = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     return output.decode("ascii")
 
-
 def list_available_gpus():
-    """Returns list of available GPU ids."""
+    """
+    Returns list of available GPU ids.
+    """
     output = run_command("nvidia-smi -L")
     # lines of the form GPU 0: TITAN X
     gpu_regex = re.compile(r"GPU (?P<gpu_id>\d+):")
@@ -35,10 +37,10 @@ def list_available_gpus():
         result.append(int(m.group("gpu_id")))
     return result
 
-
 def gpu_memory_map():
-    """Returns map of GPU id to memory allocated on that GPU."""
-
+    """
+    Returns map of GPU id to memory allocated on that GPU.
+    """
     output = run_command("nvidia-smi")
     gpu_output = output[output.find("GPU Memory"):]
     # lines of the form
@@ -55,10 +57,10 @@ def gpu_memory_map():
         result[gpu_id] += gpu_memory
     return result
 
-
 def pick_gpu_lowest_memory():
-    """Returns GPU with the least allocated memory"""
-
+    """
+    Returns GPU with the least allocated memory.
+    """
     memory_gpu_map = [(memory, gpu_id)
                       for (gpu_id, memory) in gpu_memory_map().items()]
     best_memory, best_gpu = sorted(memory_gpu_map)[0]
