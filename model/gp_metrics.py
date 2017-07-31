@@ -71,6 +71,7 @@ class GaussianProcess(object):
 
         with self.graph.as_default():
             input_x = self.computeFingerprints(smiles)
+            input_x = np.reshape(input_x, (-1, self.nBits))
             return self.model.predict(input_x)[0]
 
     def evaluate(self, train_x, train_y):
@@ -126,7 +127,8 @@ class GaussianProcess(object):
                                     'property': pd.Series(train_y)})
 
             preproc = GPmol.preprocessor.Preprocessor(input_x)
-            preproc.addFp(duplicates=True, nBits=self.nBits)
+            preproc.addFp(duplicates=True, args={'nBits': self.nBits,
+                                                 'radius': 12})
             preproc.addTarget(target='property')
             kernel = GPmol.kernels.Tanimoto(input_dim=self.nBits)
 
@@ -167,10 +169,14 @@ class GaussianProcess(object):
 
         """
 
+        if isinstance(smiles, str):
+            smiles = [smiles]
+
         mols = [Chem.MolFromSmiles(smile) for smile in smiles]
-        fps = [self.fingerprintToBitVect(Chem.GetMorganFingerprintAsBitVect(
-            mol, 12, nBits=self.nBits)) for mol in mols]
-        return np.asarray(fps)
+        fps = [Chem.GetMorganFingerprintAsBitVect(
+            mol, 12, nBits=self.nBits) for mol in mols]
+        bitvectors = [self.fingerprintToBitVect(fp) for fp in fps]
+        return np.asarray(bitvectors)
 
     def fingerprintToBitVect(self, fp):
         """
