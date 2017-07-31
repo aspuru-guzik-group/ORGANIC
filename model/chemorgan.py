@@ -27,12 +27,15 @@ try:
 except Exception:
     import tensorflow as tf
     from keras import backend as K
+from nn_metrics import KerasNN
+from gp_metrics import GaussianProcess
 from builtins import range
 from collections import OrderedDict
 from generator import Generator, Rollout
 import numpy as np
 import tensorflow as tf
 import random
+import dill as pickle
 import mol_methods as mm
 from data_loaders import Gen_Dataloader, Dis_Dataloader
 from discriminator import Discriminator
@@ -433,6 +436,161 @@ class ChemORGAN(object):
 
         if self.verbose:
             print('Defined metric {}'.format(name))
+
+    def train_nn_as_metric(self, name, train_x, train_y, nepochs=1000):
+        """Sets up a metric with a neural network trained on
+        a dataset.
+
+        Arguments.
+        -----------
+
+            - name. String used to identify the metric.
+
+            - train_x. List of SMILES identificators.
+
+            - train_y. List of property values.
+
+            - nepochs. Number of epochs for training.
+
+        Note.
+        -----------
+
+            A name.h5 file is generated in the data/nns directory,
+            and this metric can be loaded in the future using the
+            load_prev_user_metric() method through the name.pkl
+            file generated in the data/ dir.
+
+                load_prev_user_metric('name.pkl')
+
+        """
+
+        cnn = KerasNN(name)
+        cnn.train(train_x, train_y, 500, nepochs,
+                  earlystopping=True, min_delta=0.001)
+        K.clear_session()
+
+        def batch_NN(smiles, train_smiles=None, nn=None):
+            """
+            User-trained neural network.
+            """
+            if nn == None:
+                raise ValueError('The user-trained NN metric was not properly loaded.')
+            fsmiles = []
+            zeroindex = []
+            for k, sm in enumerate(smiles):
+                if mm.verify_sequence(sm):
+                    fsmiles.append(sm)
+                else:
+                    fsmiles.append('c1ccccc1')
+                    zeroindex.append(k)
+            vals = np.asarray(nn.predict(fsmiles))
+            for k in zeroindex:
+                vals[k] = 0.0
+            vals = np.squeeze(np.stack(vals, axis=1))
+            return vals
+
+        def load_NN():
+            """
+            Loads the Keras NN model for a user-trained metric.
+            """
+            nn = KerasNN(name)
+            nn.load('../data/nns/{}.h5'.format(name))
+            return ('nn', nn)
+
+        self.AV_METRICS[name] = batch_NN
+        self.LOADINGS[name] = load_NN
+
+        if self.verbose:
+            print('Defined metric {}'.format(name))
+
+        metric = [batch_NN, load_NN]
+        with open('../data/{}.pkl'.format(name), 'wb') as f:
+            pickle.dump(metric, f)
+
+    def train_gp_as_metric(self, name, train_x, train_y):
+        """Sets up a metric with a gaussian process trained on
+        a dataset.
+
+        Arguments.
+        -----------
+
+            - name. String used to identify the metric.
+
+            - train_x. List of SMILES identificators.
+
+            - train_y. List of property values.
+
+            - nepochs. Number of epochs for training.
+
+        Note.
+        -----------
+
+            A name.json file is generated in the data/gps directory,
+            and this metric can be loaded in the future using the
+            load_prev_user_metric() method through the name.pkl
+            file generated in the data/ dir.
+
+                load_prev_user_metric('name.pkl')
+
+        """
+
+        gp = GaussianProcess(name)
+        gp.train(train_x, train_y)
+
+        def batch_GP(smiles, train_smiles=None, cnn=None):
+            """
+            User-trained gaussian process.
+            """
+            if gp == None:
+                raise ValueError('The user-trained GP metric was not properly loaded.')
+            fsmiles = []
+            zeroindex = []
+            for k, sm in enumerate(smiles):
+                if mm.verify_sequence(sm):
+                    fsmiles.append(sm)
+                else:
+                    fsmiles.append('c1ccccc1')
+                    zeroindex.append(k)
+            vals = np.asarray(gp.predict(fsmiles))
+            for k in zeroindex:
+                vals[k] = 0.0
+            vals = np.squeeze(np.stack(vals, axis=1))
+            return vals
+
+        def load_GP():
+            """
+            Loads the GPmol GP model for a user-trained metric.
+            """
+            gp = GaussianProcess(name)
+            gp.load('../data/gps/{}.json'.format(name))
+            return ('gp', gp)
+
+        self.AV_METRICS[name] = batch_GP
+        self.LOADINGS[name] = load_GP
+
+        if self.verbose:
+            print('Defined metric {}'.format(name))
+
+        metric = [batch_GP, load_GP]
+        with open('../data/{}.pkl'.format(name), 'wb') as f:
+            pickle.dump(metric, f)
+
+    def load_prev_user_metric(self, name):
+        """Loads a metric that the user has previously designed.
+
+        Arguments.
+        -----------
+
+            - name. String used to identify the metric.
+
+        """
+
+        pkl = open('../data/{}.pkl'.format(name), 'rb')
+        data = pickle.load(pkl)
+        self.AV_METRICS[name] = data[0]
+        self.LOADINGS[name] = data[1]
+        if self.verbose:
+            print('Loaded metric {}'.format(name))
 
     def set_training_program(self, metrics=None, steps=None):
         """Sets a program of metrics and epochs
@@ -876,24 +1034,17 @@ class ChemORGAN(object):
 
 if __name__ == '__main__':
 
-    def RedoxRemap(vals):
-        first = mm.constant_range(vals, -0.1, 0.2)
-        second = mm.constant_range(vals, 0.9, 1.3)
-        return first + second
-
-    def MichaelRemap(vals):
-        return mm.asym_rectification(vals, 0.0, rec_right=True)
-
-    def HydRemap(vals):
-        return mm.asym_rectification(vals, 0.1, rec_right=True)
+    import pandas as pd
+    data = pd.read_csv('../data/datasets/opv.csv')
+    train_x = data['smiles'][:100]
+    train_y = np.array(data['PCE_calib'][:100])
 
     # Setup model
-    model = ChemORGAN('metrics', params={'PRETRAIN_GEN_EPOCHS': 50,
-                                         'PRETRAIN_DIS_EPOCHS': 10,
-                                         'BIG_SAMPLE_NUM': 64})
-    model.load_training_set('../data/toy.csv')
+    model = ChemORGAN('metrics')
+    model.train_gp_as_metric('test', train_x, train_y)
+    model.load_training_set('../data/trainingsets/toy.csv')
     model.load_prev_pretraining()
-    model.define_metric_as_remap('DannyRedox', 'Redox', RedoxRemap)
-    model.set_training_program(['DannyRedox'], [1])
+    # model.load_prev_user_metric('test')
+    model.set_training_program(['test'], [1])
     model.load_metrics()
     model.train()

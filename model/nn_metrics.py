@@ -150,6 +150,8 @@ class KerasNN(object):
                            verbose=2,
                            callbacks=callbacks)
 
+            self.model.save('../data/nns/{}.h5'.format(self.label))
+
     def load(self, file):
         """
         Loads a previously trained model.
@@ -182,10 +184,14 @@ class KerasNN(object):
 
         """
 
+        if isinstance(smiles, str):
+            smiles = [smiles]
+
         mols = [Chem.MolFromSmiles(smile) for smile in smiles]
-        fps = [self.fingerprintToBitVect(Chem.GetMorganFingerprintAsBitVect(
-            mol, 12, nBits=self.nBits)) for mol in mols]
-        return np.asarray(fps)
+        fps = [Chem.GetMorganFingerprintAsBitVect(
+            mol, 12, nBits=self.nBits) for mol in mols]
+        bitvectors = [self.fingerprintToBitVect(fp) for fp in fps]
+        return np.asarray(bitvectors)
 
     def fingerprintToBitVect(self, fp):
         """

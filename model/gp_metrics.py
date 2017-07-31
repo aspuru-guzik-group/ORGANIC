@@ -134,7 +134,7 @@ class GaussianProcess(object):
             self.model = GPmol.model.GPMol(kernel=kernel, preprocessor=preproc)
             self.model.train()
 
-            self.model.save('{}.json'.format(self.name))
+            self.model.save('../data/gps/{}.json'.format(self.name))
 
     def load(self, file):
         """
