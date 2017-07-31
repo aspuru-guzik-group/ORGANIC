@@ -10,7 +10,6 @@ Carlos Outeiral.
 
 The author whishes to thank Rodolfo Ferro for sharing his
 library in the alpha phase.
-
 """
 
 import GPmol

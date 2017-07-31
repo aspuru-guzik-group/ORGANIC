@@ -6,7 +6,7 @@ NN METRICS
 Support for metrics based in neural networks. To the
 date of release, support for Keras models is included.
 
-This module has been created by Carlos Outeiral.
+This module has been entirely created by Carlos Outeiral.
 """
 
 import numpy as np
@@ -39,6 +39,7 @@ class KerasNN(object):
 
         """
 
+        self.label = label
         self.graph = tf.Graph()
         self.nBits = nBits
 
