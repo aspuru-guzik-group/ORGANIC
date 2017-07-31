@@ -6,7 +6,6 @@ __pycache__/
 */checkpoints/*
 *.ckpt-*
 events.out.*
-data/*
 *.pbtxt 
 
 # C extensions
