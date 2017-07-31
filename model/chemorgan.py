@@ -317,7 +317,8 @@ class ChemORGAN(object):
 
     def define_metric(self, name, metric, load_metric=lambda *args: None,
                       pre_batch=False, pre_metric=lambda *args: None):
-        """Sets up a new metric.
+        """Sets up a new metric and generates a .pkl file in
+        the data/ directory.
 
         Arguments
         -----------
@@ -369,9 +370,14 @@ class ChemORGAN(object):
         if self.verbose:
             print('Defined metric {}'.format(name))
 
+        metric = [batch_metric, load_metric]
+        with open('../data/{}.pkl'.format(name), 'wb') as f:
+            pickle.dump(metric, f)
+
     def define_metric_as_combination(self, name, metrics, ponderations):
         """Sets up a metric made from a combination of
-        previously existing metrics.
+        previously existing metrics. Also generates a
+        metric .pkl file in the data/ directory.
 
         Arguments
         -----------
@@ -404,9 +410,15 @@ class ChemORGAN(object):
         if self.verbose:
             print('Defined metric {}'.format(name))
 
+        metric = [nmetric, load_metric]
+        with open('../data/{}.pkl'.format(name), 'wb') as f:
+            pickle.dump(metric, f)
+
+
     def define_metric_as_remap(self, name, metric, remapping):
         """Sets up a metric made from a remapping of a
-        previously existing metric.
+        previously existing metric. Also generates a .pkl
+        metric file in the data/ directory.
 
         Arguments
         -----------
@@ -417,7 +429,7 @@ class ChemORGAN(object):
 
             - remapping. Remap function.
 
-        Note
+        Note 1
         -----------
 
             Use of the mathematical remappings provided in the
@@ -436,6 +448,10 @@ class ChemORGAN(object):
 
         if self.verbose:
             print('Defined metric {}'.format(name))
+
+        metric = [nmetric, self.LOADINGS[metric]]
+        with open('../data/{}.pkl'.format(name), 'wb') as f:
+            pickle.dump(metric, f)
 
     def train_nn_as_metric(self, name, train_x, train_y, nepochs=1000):
         """Sets up a metric with a neural network trained on
@@ -575,7 +591,7 @@ class ChemORGAN(object):
         with open('../data/{}.pkl'.format(name), 'wb') as f:
             pickle.dump(metric, f)
 
-    def load_prev_user_metric(self, name):
+    def load_prev_user_metric(self, name, file=None):
         """Loads a metric that the user has previously designed.
 
         Arguments.
@@ -583,9 +599,13 @@ class ChemORGAN(object):
 
             - name. String used to identify the metric.
 
-        """
+            - file. String pointing to the .pkl file. Will use
+            data/name.pkl by default.
 
-        pkl = open('../data/{}.pkl'.format(name), 'rb')
+        """
+        if file is None:
+            file = '../data/{}.pkl'.format(name)
+        pkl = open(file, 'rb')
         data = pickle.load(pkl)
         self.AV_METRICS[name] = data[0]
         self.LOADINGS[name] = data[1]
@@ -1034,17 +1054,9 @@ class ChemORGAN(object):
 
 if __name__ == '__main__':
 
-    import pandas as pd
-    data = pd.read_csv('../data/datasets/opv.csv')
-    train_x = data['smiles'][:100]
-    train_y = np.array(data['PCE_calib'][:100])
-
     # Setup model
     model = ChemORGAN('metrics')
-    model.train_gp_as_metric('test', train_x, train_y)
-    model.load_training_set('../data/trainingsets/toy.csv')
     model.load_prev_pretraining()
-    # model.load_prev_user_metric('test')
     model.set_training_program(['test'], [1])
     model.load_metrics()
     model.train()
