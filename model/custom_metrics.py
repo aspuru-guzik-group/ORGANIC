@@ -419,7 +419,7 @@ def load_SA(filename=None):
         for j in range(1, len(i)):
             outDict[i[j]] = float(i[0])
     SA_model = outDict
-return ('SA_model', SA_model)
+    return ('SA_model', SA_model)
 
 def load_beauty(filename=None):
     """
