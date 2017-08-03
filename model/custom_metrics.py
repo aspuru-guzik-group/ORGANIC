@@ -552,12 +552,7 @@ def variety(mol, setfps):
     fp = Chem.GetMorganFingerprintAsBitVect(mol, 4, nBits=2048)
     dist = DataStructs.BulkTanimotoSimilarity(fp, setfps, returnDistance=True)
     mean_dist = np.mean(np.array(dist))
-    if NORMALIZE:
-        val = remap(mean_dist, low_rand_dst, mean_div_dst)
-        val = np.clip(val, 0.0, 1.0)
-        return val
-    else:
-        return mean_dist
+    return mean_dist
 
 def novelty(smile, train_smiles):
     return 1.0 if smile not in train_smiles else 0.0
@@ -602,11 +597,6 @@ def getSymmetry(ids, xyz):
 
 def logP(mol, train_smiles=None):
     val = Crippen.MolLogP(mol)
-    if NORMALIZE:
-        low_logp = -2.12178879609
-        high_logp = 6.0429063424
-        val = remap(val, low_logp, high_logp)
-        val = np.clip(val, 0.0, 1.0)
     return val
 
 def SA_score(mol, SA_model):
@@ -698,9 +688,6 @@ def NP_score(mol, NP_model=None):
         val = 4. + math.log10(val - 4. + 1.)
     if val < -4:
         val = -4. - math.log10(-4. - val + 1.)
-
-    if NORMALIZE:
-        val = np.clip(remap(val, -3, 1), 0.0, 1.0)
     return val
 
 def Lipinski(mol):
