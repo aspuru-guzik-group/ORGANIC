@@ -100,7 +100,7 @@ def save_smi(name, smiles):
 
 def checkarray(x):
 
-    if type(x) == np.ndarray or isinstance(x, collections.Sequence):
+    if type(x) == np.ndarray or type(x) == list:
         if x.size == 1:
             return False
         else:
@@ -227,15 +227,15 @@ def rec_fun(x, x_low, x_high, reverse=False):
         else:
             return 0
 
-def asym_rectification(x, x_low, x_high, reverse=False):
+def asym_rectification(x, y, reverse=False):
 
     if checkarray(x):
-        return np.array([asymrec_fun(xi, x_low, x_high, reverse) for xi in x])
+        return np.array([asymrec_fun(xi, y, reverse=reverse) for xi in x])
     else:
-        return asymrec_fun(x, x_low, x_high, reverse)
+        return asymrec_fun(x, y, reverse=reverse)
 
-def asymrec_fun(x, y, rec_right=False):
-    if rec_right == True:
+def asymrec_fun(x, y, reverse=False):
+    if reverse == True:
         if x < y:
             return x
         else:
@@ -245,7 +245,6 @@ def asymrec_fun(x, y, rec_right=False):
             return 0
         else:
             return x
-
 
 
 """Encoding/decoding utilities"""

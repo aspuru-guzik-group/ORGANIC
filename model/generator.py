@@ -292,8 +292,7 @@ class Generator(object):
 
     def g_optimizer(self, *args, **kwargs):
         """Sets the optimizer."""
-        return tf.train.AdamOptimizer(learning_rate=self.learning_rate,
-                                      *args, **kwargs)
+        return tf.train.AdamOptimizer(*args, **kwargs)
 
 
 class Rollout(object):
