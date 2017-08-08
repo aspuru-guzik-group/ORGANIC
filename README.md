@@ -34,7 +34,7 @@ ORGANIC has been carefully designed to be simple, while still allowing full cust
 
 ```python
 model = ORGANIC('OPVs')                     # Loads a ORGANIC with name 'OPVs'
-model.load_training_set('opv.smi')          # Loads the a training set (molecules encoded as SMILES)
+model.load_training_set('opv.smi')          # Loads the training set (molecules encoded as SMILES)
 model.set_training_program(['PCE'], [50])   # Sets the training program as 50 epochs with the PCE metric
 model.load_metrics()                        # Loads all the metrics
 model.train()                               # Proceeds with the training
