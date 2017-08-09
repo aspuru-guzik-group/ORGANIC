@@ -16,7 +16,6 @@ has added new mathematical utilities.
 from __future__ import absolute_import, division, print_function
 import os
 import csv
-import collections
 import numpy as np
 from rdkit.Chem import AllChem as Chem
 from rdkit.Chem import MolFromSmiles, MolToSmiles
@@ -343,28 +342,18 @@ def compute_results(model_samples, train_data, ord_dict, results={}, verbose=Tru
             unverified_samples.append(sample)
     results['good_samples'] = len(verified_samples)
     results['bad_samples'] = len(unverified_samples)
-    # # collect metrics
-    # metrics = ['novelty', 'hard_novelty', 'soft_novelty',
-    #            'diversity', 'conciseness', 'solubility',
-    #            'naturalness', 'synthesizability']
-
-    # for objective in metrics:
-    #     func = load_reward(objective)
-    #     results[objective] = np.mean(func(verified_samples, train_data))
-
     # save smiles
     if 'Batch' in results.keys():
         smi_name = '{}_{}'.format(results['exp_name'], results['Batch'])
         save_smi(smi_name, samples)
         results['model_samples'] = smi_name
-    # print results
     if verbose:
-        # print_results(verified_samples, unverified_samples, metrics, results)
         print_results(verified_samples, unverified_samples, results)
     return
 
 def print_results(verified_samples, unverified_samples, results={}):
-    print('~~~ Summary Results ~~~')
+    print('Summary of the epoch')
+    print('~~~~~~~~~~~~~~~~~~~~~~~~\n')
     print('{:15s} : {:6d}'.format("Total samples", results['n_samples']))
     percent = results['uniq_samples'] / float(results['n_samples']) * 100
     print('{:15s} : {:6d} ({:2.2f}%)'.format(
@@ -375,25 +364,22 @@ def print_results(verified_samples, unverified_samples, results={}):
     percent = results['good_samples'] / float(results['n_samples']) * 100
     print('{:15s} : {:6d} ({:2.2f}%)'.format(
         'Verified', results['good_samples'], percent))
-    # print('\tmetrics...')
-    # for i in metrics:
-    #     print('{:20s} : {:1.4f}'.format(i, results[i]))
 
+    print('\nSome good samples:')
+    print('~~~~~~~~~~~~~~~~~~~~~~~~\n')
     if len(verified_samples) > 10:
-        print('\nExample of good samples:')
-
         for s in verified_samples[0:10]:
             print('' + s)
     else:
-        print('\nno good samples found :(')
+        print('No good samples were found :(...')
 
+    print('\nSome bad samples:')
+    print('~~~~~~~~~~~~~~~~~~~~~~~~\n')
     if len(unverified_samples) > 10:
-        print('\nExample of bad samples:')
         for s in unverified_samples[0:10]:
             print('' + s)
     else:
-        print('\nno bad samples found :(')
+        print('No bad samples were found :D!')
 
-    print('~~~~~~~~~~~~~~~~~~~~~~~')
     return
 
