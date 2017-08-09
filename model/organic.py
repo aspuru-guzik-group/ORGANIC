@@ -837,13 +837,9 @@ class ORGANIC(object):
                 supervised_g_losses.append(g_loss)
             loss = np.mean(supervised_g_losses)
 
-            if epoch == 10 or epoch % 40 == 0:
+            if epoch % 10 == 0:
 
-                samples = self.generate_samples(self.SAMPLE_NUM)
-                self.mle_loader.create_batches(samples)
                 print('\t train_loss {}'.format(loss))
-                # mm.compute_results(samples, self.train_samples,
-                #                    self.ord_dict, results)
 
         samples = self.generate_samples(self.SAMPLE_NUM)
         self.mle_loader.create_batches(samples)
@@ -851,7 +847,7 @@ class ORGANIC(object):
         if self.LAMBDA != 0:
 
             if self.verbose:
-                print('DISCRIMINATOR PRETRAINING')
+                print('\nDISCRIMINATOR PRETRAINING')
 
             for i in tqdm(range(self.PRETRAIN_DIS_EPOCHS)):
 
@@ -893,32 +889,30 @@ class ORGANIC(object):
 
         return generated_samples
 
-    def train(self):
+    def train(self, ckpt_dir='checkpoints/'):
         """Trains the model. If necessary, also includes pretraining."""
 
         if not self.PRETRAINED and not self.SESS_LOADED:
 
             self.sess.run(tf.global_variables_initializer())
             self.pretrain()
-            #
-            #
-            # CHANGE THIS FOR CKPT_DIR
-            #
-            #
-            #
-            ckpt_dir = 'checkpoints/{}_pretrain'.format(self.PREFIX)
+
             if not os.path.exists(ckpt_dir):
                 os.makedirs(ckpt_dir)
-            ckpt_file = os.path.join(ckpt_dir, 'pretrain_ckpt')
+            ckpt_file = os.path.join(ckpt_dir,
+                                     '{}_pretrain_ckpt'.format(self.PREFIX))
             saver = tf.train.Saver()
             path = saver.save(self.sess, ckpt_file)
-            print('Pretrain finished and saved at {}'.format(path))
+            if self.verbose:
+                print('Pretrain saved at {}'.format(path))
 
         if not hasattr(self, 'rollout'):
             self.rollout = Rollout(self.generator, 0.8, self.PAD_NUM)
 
-        # print('#########################################################################')
-        # print('Start Reinforcement Training Generator...')
+        if self.verbose:
+            print('\nSTARTING TRAINING')
+            print('============================\n')
+
         results_rows = []
         for nbatch in tqdm(range(self.TOTAL_BATCH)):
 
@@ -929,7 +923,7 @@ class ORGANIC(object):
             if metric in self.AV_METRICS.keys():
                 reward_func = self.AV_METRICS[metric]
             else:
-                raise ValueError('objective {} not found!'.format(metric))
+                raise ValueError('Metric {} not found!'.format(metric))
 
             if self.kwargs[metric] is not None:
 
@@ -958,25 +952,18 @@ class ORGANIC(object):
 
                     return rewards * weights
 
-            ###################################
-
-            # print('* Making samples')
             if nbatch % 10 == 0:
                 gen_samples = self.generate_samples(self.BIG_SAMPLE_NUM)
             else:
                 gen_samples = self.generate_samples(self.SAMPLE_NUM)
             self.gen_loader.create_batches(gen_samples)
-            # print('batch_num: {}'.format(nbatch))
             results['Batch'] = nbatch
+            print('Batch n. {}'.format(nbatch))
+            print('============================\n')
 
             # results
             mm.compute_results(
                 gen_samples, self.train_samples, self.ord_dict, results)
-
-            # print(
-            #     '#########################################################################')
-            # print('-> Training generator with RL.')
-            # print('G Epoch {}'.format(nbatch))
 
             for it in range(self.GEN_ITERATIONS):
                 samples = self.generator.generate(self.sess)
@@ -985,27 +972,26 @@ class ORGANIC(object):
                     batch_reward, self.LAMBDA)
                 nll = self.generator.generator_step(
                     self.sess, samples, rewards)
-                # results
 
-                # print('Rewards be like...')
-                # np.set_printoptions(precision=3, suppress=True)
-                # print(rewards)
-                # mean_r, std_r = np.mean(rewards), np.std(rewards)
-                # min_r, max_r = np.min(rewards), np.max(rewards)
-                # print('Mean: {:.3f} , Std:  {:.3f}'.format(mean_r, std_r),
-                #       end='')
-                # print(', Min: {:.3f} , Max:  {:.3f}\n'.format(min_r, max_r))
-                # np.set_printoptions(precision=8, suppress=False)
-                # print('neg-loglike: {}'.format(nll))
-
+                print('Rewards')
+                print('~~~~~~~~~~~~~~~~~~~~~~~~\n')
+                np.set_printoptions(precision=3, suppress=True)
+                mean_r, std_r = np.mean(rewards), np.std(rewards)
+                min_r, max_r = np.min(rewards), np.max(rewards)
+                print('Mean:                {:.3f}'.format(mean_r))
+                print('               +/-   {:.3f}'.format(std_r))
+                print('Min:                 {:.3f}'.format(min_r))
+                print('Max:                 {:.3f}'.format(max_r))
+                np.set_printoptions(precision=8, suppress=False)
                 results['neg-loglike'] = nll
             self.rollout.update_params()
 
             # generate for discriminator
             if self.LAMBDA != 0:
-                print('DISCRIMINATOR TRAINING')
+                print('\nDISCRIMINATOR TRAINING')
+                print('============================\n')
                 for i in range(self.DIS_EPOCHS):
-                    print('D_Epoch {}'.format(i))
+                    print('Discriminator epoch {}...'.format(i+1))
 
                     negative_samples = self.generate_samples(self.POSITIVE_NUM)
                     dis_x_train, dis_y_train = self.dis_loader.load_train_data(
@@ -1031,7 +1017,7 @@ class ORGANIC(object):
 
                     results['D_loss_{}'.format(i)] = d_loss
                     results['Accuracy_{}'.format(i)] = accuracy
-            print('results')
+                print('\nDiscriminator trained.')
             results_rows.append(results)
             if nbatch % self.EPOCH_SAVES == 0 or \
                nbatch == self.TOTAL_BATCH - 1:
@@ -1053,7 +1039,7 @@ class ORGANIC(object):
                 ckpt_file = os.path.join(
                     ckpt_dir, '{}_{}.ckpt'.format(self.PREFIX, label))
                 path = model_saver.save(self.sess, ckpt_file)
-                # print('Model saved at {}'.format(path))
+                print('\nModel saved at {}'.format(path))
 
         print('\n######### FINISHED #########')
 
@@ -1061,8 +1047,8 @@ class ORGANIC(object):
 if __name__ == '__main__':
 
     # Setup model
-    model = ORGANIC('metrics')
-    model.load_prev_pretraining()
-    model.set_training_program(['test'], [1])
+    model = ORGANIC('metrics', params={'PRETRAIN_GEN_EPOCHS': 1, 'PRETRAIN_DIS_EPOCHS': 1})
+    model.load_training_set('../data/trainingsets/toy.csv')
+    model.set_training_program(['validity'], [1])
     model.load_metrics()
-    model.train()
+    model.train(ckpt_dir='ckpt')
