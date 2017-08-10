@@ -16,7 +16,7 @@ from copy import deepcopy
 from math import exp, log
 from collections import OrderedDict
 from nn_metrics import KerasNN
-from gp_metrics import GaussianProcess
+#from gp_metrics import GaussianProcess
 from mol_methods import *
 
 """
@@ -265,131 +265,131 @@ def batch_mp(smiles, train_smiles=None, cnn=None):
     vals = np.squeeze(np.stack(vals, axis=1))
     return vals
 
-def batch_bp(smiles, train_smiles=None, gp=None):
-    """
-    Boiling point as computed by a gaussian process acting
-    on Morgan fingerprints.
-    """
-    if gp == None:
-        raise ValueError('The boiling point metric was not properly loaded.')
-    fsmiles = []
-    zeroindex = []
-    for k, sm in enumerate(smiles):
-        if verify_sequence(sm):
-            fsmiles.append(sm)
-        else:
-            fsmiles.append('c1ccccc1')
-            zeroindex.append(k)
-    vals = np.asarray(gp.predict(fsmiles))
-    for k in zeroindex:
-        vals[k] = 0.0
-    vals = np.squeeze(np.stack(vals, axis=1))
-    return vals
-
-def batch_density(smiles, train_smiles=None, gp=None):
-    """
-    Density as computed by a gaussian process acting on
-    Morgan fingerprints.
-    """
-    if gp == None:
-        raise ValueError('The density metric was not properly loaded.')
-    fsmiles = []
-    zeroindex = []
-    for k, sm in enumerate(smiles):
-        if verify_sequence(sm):
-            fsmiles.append(sm)
-        else:
-            fsmiles.append('c1ccccc1')
-            zeroindex.append(k)
-    vals = np.asarray(gp.predict(fsmiles))
-    for k in zeroindex:
-        vals[k] = 0.0
-    vals = np.squeeze(np.stack(vals, axis=1))
-    return vals
-
-def batch_mutagenicity(smiles, train_smiles=None, gp=None):
-    """
-    Mutagenicity as estimated by a gaussian process acting on
-    Morgan fingerprints.
-    """
-    if gp == None:
-        raise ValueError('The mutagenicity was not properly loaded.')
-    fsmiles = []
-    zeroindex = []
-    for k, sm in enumerate(smiles):
-        if verify_sequence(sm):
-            fsmiles.append(sm)
-        else:
-            fsmiles.append('c1ccccc1')
-            zeroindex.append(k)
-    vals = np.asarray(gp.predict(fsmiles))
-    for k in zeroindex:
-        vals[k] = 0.0
-    vals = np.squeeze(np.stack(vals, axis=1))
-    return vals
-
-def batch_pvap(smiles, train_smiles=None, gp=None):
-    """
-    Vapour pressure as computed by a gaussian process acting on
-    Morgan fingerprints.
-    """
-    if gp == None:
-        raise ValueError('The vapour pressure was not properly loaded.')
-    fsmiles = []
-    zeroindex = []
-    for k, sm in enumerate(smiles):
-        if verify_sequence(sm):
-            fsmiles.append(sm)
-        else:
-            fsmiles.append('c1ccccc1')
-            zeroindex.append(k)
-    vals = np.asarray(gp.predict(fsmiles))
-    for k in zeroindex:
-        vals[k] = 0.0
-    vals = np.squeeze(np.stack(vals, axis=1))
-    return vals
-
-def batch_solubility(smiles, train_smiles=None, gp=None):
-    """
-    Solubility in water as computed by a gaussian process acting on
-    Morgan fingerprints.
-    """
-    if gp == None:
-        raise ValueError('The solubility was not properly loaded.')
-    fsmiles = []
-    zeroindex = []
-    for k, sm in enumerate(smiles):
-        if verify_sequence(sm):
-            fsmiles.append(sm)
-        else:
-            fsmiles.append('c1ccccc1')
-            zeroindex.append(k)
-    vals = np.asarray(gp.predict(fsmiles))
-    for k in zeroindex:
-        vals[k] = 0.0
-    vals = np.squeeze(np.stack(vals, axis=1))
-    return vals
-
-def batch_viscosity(smiles, train_smiles=None, gp=None):
-    """
-    Viscosity as computed by a gaussian process acting on
-    Morgan fingerprints.
-    """
-    if gp == None:
-        raise ValueError('The viscosity was not properly loaded.')
-    fsmiles = []
-    zeroindex = []
-    for k, sm in enumerate(smiles):
-        if verify_sequence(sm):
-            fsmiles.append(sm)
-        else:
-            fsmiles.append('c1ccccc1')
-            zeroindex.append(k)
-    vals = np.asarray(gp.predict(fsmiles))
-    for k in zeroindex:
-        vals[k] = 0.0
-    vals = np.squeeze(np.stack(vals, axis=1))
-    return vals
+#def batch_bp(smiles, train_smiles=None, gp=None):
+#    """
+#    Boiling point as computed by a gaussian process acting
+#    on Morgan fingerprints.
+#    """
+#    if gp == None:
+#        raise ValueError('The boiling point metric was not properly loaded.')
+#    fsmiles = []
+#    zeroindex = []
+#    for k, sm in enumerate(smiles):
+#        if verify_sequence(sm):
+#            fsmiles.append(sm)
+#        else:
+#            fsmiles.append('c1ccccc1')
+#            zeroindex.append(k)
+#    vals = np.asarray(gp.predict(fsmiles))
+#    for k in zeroindex:
+#        vals[k] = 0.0
+#    vals = np.squeeze(np.stack(vals, axis=1))
+#    return vals
+#
+#def batch_density(smiles, train_smiles=None, gp=None):
+#    """
+#    Density as computed by a gaussian process acting on
+#    Morgan fingerprints.
+#    """
+#    if gp == None:
+#        raise ValueError('The density metric was not properly loaded.')
+#    fsmiles = []
+#    zeroindex = []
+#    for k, sm in enumerate(smiles):
+#        if verify_sequence(sm):
+#            fsmiles.append(sm)
+#        else:
+#            fsmiles.append('c1ccccc1')
+#            zeroindex.append(k)
+#    vals = np.asarray(gp.predict(fsmiles))
+#    for k in zeroindex:
+#        vals[k] = 0.0
+#    vals = np.squeeze(np.stack(vals, axis=1))
+#    return vals
+#
+#def batch_mutagenicity(smiles, train_smiles=None, gp=None):
+#    """
+#    Mutagenicity as estimated by a gaussian process acting on
+#    Morgan fingerprints.
+#    """
+#    if gp == None:
+#        raise ValueError('The mutagenicity was not properly loaded.')
+#    fsmiles = []
+#    zeroindex = []
+#    for k, sm in enumerate(smiles):
+#        if verify_sequence(sm):
+#            fsmiles.append(sm)
+#        else:
+#            fsmiles.append('c1ccccc1')
+#            zeroindex.append(k)
+#    vals = np.asarray(gp.predict(fsmiles))
+#    for k in zeroindex:
+#        vals[k] = 0.0
+#    vals = np.squeeze(np.stack(vals, axis=1))
+#    return vals
+#
+#def batch_pvap(smiles, train_smiles=None, gp=None):
+#    """
+#    Vapour pressure as computed by a gaussian process acting on
+#    Morgan fingerprints.
+#    """
+#    if gp == None:
+#        raise ValueError('The vapour pressure was not properly loaded.')
+#    fsmiles = []
+#    zeroindex = []
+#    for k, sm in enumerate(smiles):
+#        if verify_sequence(sm):
+#            fsmiles.append(sm)
+#        else:
+#            fsmiles.append('c1ccccc1')
+#            zeroindex.append(k)
+#    vals = np.asarray(gp.predict(fsmiles))
+#    for k in zeroindex:
+#        vals[k] = 0.0
+#    vals = np.squeeze(np.stack(vals, axis=1))
+#    return vals
+#
+#def batch_solubility(smiles, train_smiles=None, gp=None):
+#    """
+#    Solubility in water as computed by a gaussian process acting on
+#    Morgan fingerprints.
+#    """
+#    if gp == None:
+#        raise ValueError('The solubility was not properly loaded.')
+#    fsmiles = []
+#    zeroindex = []
+#    for k, sm in enumerate(smiles):
+#        if verify_sequence(sm):
+#            fsmiles.append(sm)
+#        else:
+#            fsmiles.append('c1ccccc1')
+#            zeroindex.append(k)
+#    vals = np.asarray(gp.predict(fsmiles))
+#    for k in zeroindex:
+#        vals[k] = 0.0
+#    vals = np.squeeze(np.stack(vals, axis=1))
+#    return vals
+#
+#def batch_viscosity(smiles, train_smiles=None, gp=None):
+#    """
+#    Viscosity as computed by a gaussian process acting on
+#    Morgan fingerprints.
+#    """
+#    if gp == None:
+#        raise ValueError('The viscosity was not properly loaded.')
+#    fsmiles = []
+#    zeroindex = []
+#    for k, sm in enumerate(smiles):
+#        if verify_sequence(sm):
+#            fsmiles.append(sm)
+#        else:
+#            fsmiles.append('c1ccccc1')
+#            zeroindex.append(k)
+#    vals = np.asarray(gp.predict(fsmiles))
+#    for k in zeroindex:
+#        vals[k] = 0.0
+#    vals = np.squeeze(np.stack(vals, axis=1))
+#    return vals
 
 """
 Loadings
@@ -484,53 +484,53 @@ def load_mp():
     cnn_mp.load('../data/nns/mp.h5')
     return ('cnn', cnn_mp)
 
-def load_bp():
-    """
-    Loads the GPmol GP model for boiling point.
-    """
-    gp_bp = GaussianProcess('bp')
-    gp_bp.load('../data/gps/bp.json')
-    return ('gp', gp_bp)
-
-def load_density():
-    """
-    Loads the GPmol GP model for density.
-    """
-    gp_density = GaussianProcess('density')
-    gp_density.load('../data/gps/density.json')
-    return ('gp', gp_density)
-
-def load_mutagenicity():
-    """
-    Loads the GPmol GP model for mutagenicity.
-    """
-    gp_mutagenicity = GaussianProcess('mutagenicity')
-    gp_mutagenicity.load('../data/gps/mutagenicity.json')
-    return ('gp', gp_mutagenicity)
-
-def load_pvap():
-    """
-    Loads the GPmol GP model for vapour pressure.
-    """
-    gp_pvap = GaussianProcess('pvap')
-    gp_pvap.load('../data/gps/pvap.json')
-    return ('gp', gp_pvap)
-
-def load_solubility():
-    """
-    Loads the GPmol GP model for solubility.
-    """
-    gp_solubility = GaussianProcess('solubility')
-    gp_solubility.load('../data/gps/solubility.json')
-    return ('gp', gp_solubility)
-
-def load_viscosity():
-    """
-    Loads the GPmol GP model for viscosity.
-    """
-    gp_viscosity = GaussianProcess('viscosity')
-    gp_viscosity.load('../data/gps/viscosity.json')
-    return ('gp', gp_viscosity)
+#def load_bp():
+#    """
+#    Loads the GPmol GP model for boiling point.
+#    """
+#    gp_bp = GaussianProcess('bp')
+#    gp_bp.load('../data/gps/bp.json')
+#    return ('gp', gp_bp)
+#
+#def load_density():
+#    """
+#    Loads the GPmol GP model for density.
+#    """
+#    gp_density = GaussianProcess('density')
+#    gp_density.load('../data/gps/density.json')
+#    return ('gp', gp_density)
+#
+#def load_mutagenicity():
+#    """
+#    Loads the GPmol GP model for mutagenicity.
+#    """
+#    gp_mutagenicity = GaussianProcess('mutagenicity')
+#    gp_mutagenicity.load('../data/gps/mutagenicity.json')
+#    return ('gp', gp_mutagenicity)
+#
+#def load_pvap():
+#    """
+#    Loads the GPmol GP model for vapour pressure.
+#    """
+#    gp_pvap = GaussianProcess('pvap')
+#    gp_pvap.load('../data/gps/pvap.json')
+#    return ('gp', gp_pvap)
+#
+#def load_solubility():
+#    """
+#    Loads the GPmol GP model for solubility.
+#    """
+#    gp_solubility = GaussianProcess('solubility')
+#    gp_solubility.load('../data/gps/solubility.json')
+#    return ('gp', gp_solubility)
+#
+#def load_viscosity():
+#    """
+#    Loads the GPmol GP model for viscosity.
+#    """
+#    gp_viscosity = GaussianProcess('viscosity')
+#    gp_viscosity.load('../data/gps/viscosity.json')
+#    return ('gp', gp_viscosity)
 
 """
 Metrics functions
@@ -821,11 +821,11 @@ def metrics_loading():
     load['pce'] = load_PCE
     load['bandgap'] = load_bandgap
     load['mp'] = load_mp
-    load['bp'] = load_bp
-    load['density'] = load_density
-    load['pvap'] = load_pvap
-    load['solubility'] = load_solubility
-    load['viscosity'] = load_viscosity
+#    load['bp'] = load_bp
+#    load['density'] = load_density
+#    load['pvap'] = load_pvap
+#    load['solubility'] = load_solubility
+#    load['viscosity'] = load_viscosity
 
     return load
 
@@ -845,7 +845,6 @@ def get_metrics():
     metrics['variety'] = batch_variety
     metrics['symmetry'] = batch_symmetry
     metrics['conciseness'] = batch_conciseness
-    metrics['logP'] = batch_logP
     metrics['lipinski'] = batch_lipinski
     metrics['synthesizability'] = batch_SA
     metrics['naturalness'] = batch_NPLikeliness
@@ -856,13 +855,14 @@ def get_metrics():
     metrics['mutagenicity'] = batch_mutagenicity
 
     # Physical properties
+    metrics['logP'] = batch_logP
     metrics['pce'] = batch_PCE
     metrics['bandgap'] = batch_bandgap
     metrics['mp'] = batch_mp
-    metrics['bp'] = batch_bp
-    metrics['density'] = batch_density
-    metrics['pvap'] = batch_pvap
-    metrics['solubility'] = batch_solubility
-    metrics['viscosity'] = batch_viscosity
+#    metrics['bp'] = batch_bp
+#    metrics['density'] = batch_density
+#    metrics['pvap'] = batch_pvap
+#    metrics['solubility'] = batch_solubility
+#    metrics['viscosity'] = batch_viscosity
 
     return metrics

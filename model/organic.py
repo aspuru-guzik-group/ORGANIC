@@ -34,7 +34,7 @@ except Exception:
     import tensorflow as tf
     from keras import backend as K
 from nn_metrics import KerasNN
-from gp_metrics import GaussianProcess
+#from gp_metrics import GaussianProcess
 from builtins import range
 from collections import OrderedDict
 from generator import Generator, Rollout
@@ -529,73 +529,73 @@ class ORGANIC(object):
         with open('../data/{}.pkl'.format(name), 'wb') as f:
             pickle.dump(metric, f)
 
-    def train_gp_as_metric(self, name, train_x, train_y):
-        """Sets up a metric with a gaussian process trained on
-        a dataset.
-
-        Arguments.
-        -----------
-
-            - name. String used to identify the metric.
-
-            - train_x. List of SMILES identificators.
-
-            - train_y. List of property values.
-
-            - nepochs. Number of epochs for training.
-
-        Note.
-        -----------
-
-            A name.json file is generated in the data/gps directory,
-            and this metric can be loaded in the future using the
-            load_prev_user_metric() method through the name.pkl
-            file generated in the data/ dir.
-
-                load_prev_user_metric('name.pkl')
-
-        """
-
-        gp = GaussianProcess(name)
-        gp.train(train_x, train_y)
-
-        def batch_GP(smiles, train_smiles=None, cnn=None):
-            """
-            User-trained gaussian process.
-            """
-            if gp == None:
-                raise ValueError('The user-trained GP metric was not properly loaded.')
-            fsmiles = []
-            zeroindex = []
-            for k, sm in enumerate(smiles):
-                if mm.verify_sequence(sm):
-                    fsmiles.append(sm)
-                else:
-                    fsmiles.append('c1ccccc1')
-                    zeroindex.append(k)
-            vals = np.asarray(gp.predict(fsmiles))
-            for k in zeroindex:
-                vals[k] = 0.0
-            vals = np.squeeze(np.stack(vals, axis=1))
-            return vals
-
-        def load_GP():
-            """
-            Loads the GPmol GP model for a user-trained metric.
-            """
-            gp = GaussianProcess(name)
-            gp.load('../data/gps/{}.json'.format(name))
-            return ('gp', gp)
-
-        self.AV_METRICS[name] = batch_GP
-        self.LOADINGS[name] = load_GP
-
-        if self.verbose:
-            print('Defined metric {}'.format(name))
-
-        metric = [batch_GP, load_GP]
-        with open('../data/{}.pkl'.format(name), 'wb') as f:
-            pickle.dump(metric, f)
+#    def train_gp_as_metric(self, name, train_x, train_y):
+#        """Sets up a metric with a gaussian process trained on
+#        a dataset.
+#
+#        Arguments.
+#        -----------
+#
+#            - name. String used to identify the metric.
+#
+#            - train_x. List of SMILES identificators.
+#
+#            - train_y. List of property values.
+#
+#            - nepochs. Number of epochs for training.
+#
+#        Note.
+#        -----------
+#
+#            A name.json file is generated in the data/gps directory,
+#            and this metric can be loaded in the future using the
+#            load_prev_user_metric() method through the name.pkl
+#            file generated in the data/ dir.
+#
+#                load_prev_user_metric('name.pkl')
+#
+#        """
+#
+#        gp = GaussianProcess(name)
+#        gp.train(train_x, train_y)
+#
+#        def batch_GP(smiles, train_smiles=None, cnn=None):
+#            """
+#            User-trained gaussian process.
+#            """
+#            if gp == None:
+#                raise ValueError('The user-trained GP metric was not properly loaded.')
+#            fsmiles = []
+#            zeroindex = []
+#            for k, sm in enumerate(smiles):
+#                if mm.verify_sequence(sm):
+#                    fsmiles.append(sm)
+#                else:
+#                    fsmiles.append('c1ccccc1')
+#                    zeroindex.append(k)
+#            vals = np.asarray(gp.predict(fsmiles))
+#            for k in zeroindex:
+#                vals[k] = 0.0
+#            vals = np.squeeze(np.stack(vals, axis=1))
+#            return vals
+#
+#        def load_GP():
+#            """
+#            Loads the GPmol GP model for a user-trained metric.
+#            """
+#            gp = GaussianProcess(name)
+#            gp.load('../data/gps/{}.json'.format(name))
+#            return ('gp', gp)
+#
+#        self.AV_METRICS[name] = batch_GP
+#        self.LOADINGS[name] = load_GP
+#
+#        if self.verbose:
+#            print('Defined metric {}'.format(name))
+#
+#        metric = [batch_GP, load_GP]
+#        with open('../data/{}.pkl'.format(name), 'wb') as f:
+#            pickle.dump(metric, f)
 
     def load_prev_user_metric(self, name, file=None):
         """Loads a metric that the user has previously designed.
