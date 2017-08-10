@@ -40,4 +40,4 @@ model.load_metrics()                        # Loads all the metrics
 model.train()                               # Proceeds with the training
 ```
 
-If you are interested, we encourage you to read our '10 minutes to ORGANIC' tutorial, where you can learn all (literally, all) the functionalities of ORGANIC.
+If you are interested, we encourage you to read our '20 minutes to ORGANIC' tutorial, where you can learn all (literally, all) the functionalities of ORGANIC.
