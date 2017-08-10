@@ -1,6 +1,6 @@
 # 20 minutes to ORGANIC
 
-<sub><sup>This tutorial is authored by __Carlos Outeiral__. If you have any doubt, feel free to ask your questions to *carlos@outeiral.net* at any time.</sup></sub>
+<sup>This tutorial is authored by __Carlos Outeiral__. If you have any doubt, feel free to ask your questions to *carlos@outeiral.net* at any time.</sup>
 
 During the whole development process, our team had a clear idea: a code, no matter its power, is useless if nobody can run it. That's the reasonwhy we invested so much time in making **ORGANIC** so simple. In this tutorial, I am going to teach you how to use every functionality of the code and unleash the power of machine learning in chemical space.
 
