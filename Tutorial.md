@@ -8,7 +8,7 @@ If it takes more than 20 minutes, please ask for a refund.
 
 ## Working on your machine
 
-One great thing of ORGANIC is that it does not require a super-powerful machine; it can be run on a personal computer if you're ready to wait about a week (or even less if you've got a good graphic card). Nonetheless, we want our tutorial examples to run very quick. So I will ask you to open your Jupyter Notebook, write the following lines and wait until we are ready to teach you what they mean.
+One great thing of ORGANIC is that it does not require a super-powerful machine; it can be run on a personal computer if you're ready to wait about a week (or even less if you've got a good graphic card). Nonetheless, we want our tutorial examples to run very quickly. So I will ask you to open your Jupyter Notebook, write the following lines and wait until we are ready to teach you what they mean.
 
 ```python
 params = {
@@ -77,4 +77,16 @@ There are three main elements that every property optimization requires:
 * A training set
 * A metric
 
-The ORGANIC model is what we're learning to use, and the training set (just a list of molecules, in the SMILES encoding, that have properties similar to those that we'd like to find) can be easily 
+The ORGANIC model is what we're learning to use, and the training set (just a list of molecules, in the SMILES encoding, that have properties similar to those that we'd like to find) can be easily loaded with the *load_training_set()* command, as we just explained. So let's talk about the metric.
+
+The metric is some kind of procedure that, given a molecule (as always, encoded in a SMILES string), is able to assign a score in the interval [0, 1] that tells the model how well it is performing. As we shown in our research paper, given a good metric, ORGANIC is able to optimize the molecular distribution to the desired parameters. The problem is, however, how to specify an appropriate metric.
+
+### Built-in metrics
+
+
+
+### Metric remapping
+
+### User-defined metrics
+
+## Control over hyperparameters
