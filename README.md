@@ -1,7 +1,7 @@
 # ORGANIC
 
 
-**ORGANIC** is an efficient molecular discovery tool, able to create molecules with desired properties. It has a user-oriented interface, and doesn't require a HPC cluster. Feel free to check our article about ORGANIC, and/or contact the developers if you have any issue or are interested in collaborations.
+**ORGANIC** (Objective-Reinforced Generative Adversarial Network for Inverse-design Chemistry) is an efficient molecular generation tool, able to create molecules with desired properties. It has a user-oriented interface, and doesn't require a HPC cluster. Feel free to check our article about ORGANIC, and/or contact the developers if you have any issue or are interested in collaborations.
 
 This implementation is authored by **Carlos Outeiral** (carlos@outeiral.net), **Benjamin Sanchez-Lengeling** (beangoben@gmail.com), **Gabriel Guimaraes** (gabrielguimaraes@college.harvard.edu) and **Alan Aspuru-Guzik** (alan@aspuru.com), affiliated to Harvard University, Department of Chemistry and Chemical Biology, at the time of release.
 
@@ -10,7 +10,7 @@ This implementation is authored by **Carlos Outeiral** (carlos@outeiral.net), **
 To install, just clone our repo:
 
 ```
-git clone https://github.com/couteiral/ORGANIC.git
+git clone https://github.com/aspuru-guzik-group/ORGANIC.git
 ```
 
 And, it is done!
@@ -21,7 +21,6 @@ And, it is done!
 - future==0.16.0
 - rdkit
 - keras
-- GPmol
 - numpy
 - scipy
 - pandas
