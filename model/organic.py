@@ -416,9 +416,9 @@ class ORGANIC(object):
         if self.verbose:
             print('Defined metric {}'.format(name))
 
-        metric = [nmetric, load_metric]
+        nmetric = [metric, load_metric]
         with open('../data/{}.pkl'.format(name), 'wb') as f:
-            pickle.dump(metric, f)
+            pickle.dump(nmetric, f)
 
 
     def define_metric_as_remap(self, name, metric, remapping):
