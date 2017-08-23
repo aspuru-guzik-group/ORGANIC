@@ -814,7 +814,7 @@ def metrics_loading():
     load['substructure_match_all'] = load_substructure_match_all
     load['substructure_match_any'] = load_substructure_match_any
     load['substructure_absence'] = load_substructure_absence
-    load['mutagenicity'] = load_mutagenicity
+#    load['mutagenicity'] = load_mutagenicity
 
     # Physical properties
     load['logP'] = lambda *args: None
