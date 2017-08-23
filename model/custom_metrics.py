@@ -852,7 +852,7 @@ def get_metrics():
     metrics['substructure_match_all'] = batch_substructure_match_all
     metrics['substructure_match_any'] = batch_substructure_match_any
     metrics['substructure_absence'] = batch_substructure_absence
-    metrics['mutagenicity'] = batch_mutagenicity
+#    metrics['mutagenicity'] = batch_mutagenicity
 
     # Physical properties
     metrics['logP'] = batch_logP
