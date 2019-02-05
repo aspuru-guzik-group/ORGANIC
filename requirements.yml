@@ -16,6 +16,7 @@ dependencies:
 - tensorflow==1.0
 - keras
 - pymatgen
+- dill
 - pip
 - pip:
   - tqdm
