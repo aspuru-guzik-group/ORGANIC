@@ -12,7 +12,7 @@ It is recommended to use Anaconda 3 to install ORGANIC. Create a new empty Pytho
 
 ## Working on your machine
 
-One great thing of ORGANIC is that it does not require a super-powerful machine; it can be run on a personal computer if you're ready to wait about a week (or even less if you've got a good graphic card). Nonetheless, we want our tutorial examples to run very quickly. So I will ask you to open your Jupyter Notebook, write the following lines and wait until we are ready to teach you what they mean.
+One great thing of ORGANIC is that it does not require a super-powerful machine; it can be run on a personal computer if you're ready to wait about a week (or even less if you've got a good graphic card). Nonetheless, we want our tutorial examples to run very quickly. So I will ask you to open your Jupyter Notebook, write the following lines and wait until we are ready to teach you what they mean. Alternatively, you can run the tutorial codem, `tutorial.py`, found in the `model` directory.
 
 ```python
 params = {
