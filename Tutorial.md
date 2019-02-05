@@ -6,6 +6,10 @@ During the whole development process, our team had a clear idea: a code, no matt
 
 If it takes more than 20 minutes, please ask for a refund.
 
+## Installation
+
+It is recommended to use Anaconda 3 to install ORGANIC. Create a new empty Python 3.6 environment called `ORGANIC` and update the environment using the command `conda env update -f=requirements.yml`.
+
 ## Working on your machine
 
 One great thing of ORGANIC is that it does not require a super-powerful machine; it can be run on a personal computer if you're ready to wait about a week (or even less if you've got a good graphic card). Nonetheless, we want our tutorial examples to run very quickly. So I will ask you to open your Jupyter Notebook, write the following lines and wait until we are ready to teach you what they mean.
@@ -65,6 +69,14 @@ And, finally, we indicate to the model that we want to train it:
 
 ```python
 model.train()
+```
+
+If we want, we can genreate and print one batch of samples (which we defined earlier as 30 samples):
+
+```python
+model.train()
+for i in model.generate_samples(30):
+    print(mm.decode(i, model.ord_dict))
 ```
 
 Seems simple, right? So now, let us try to get a little bit deeper.
