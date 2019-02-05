@@ -8,7 +8,7 @@ If it takes more than 20 minutes, please ask for a refund.
 
 ## Installation
 
-It is recommended to use Anaconda 3 to install ORGANIC. Create a new empty Python 3.6 environment called `ORGANIC` and update the environment using the command `conda env update -f=requirements.yml`.
+It is recommended to use Anaconda 3 to install ORGANIC. Create a new environment using the command `conda env create -f=requirements.yml`.
 
 ## Working on your machine
 
