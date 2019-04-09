@@ -1,4 +1,4 @@
-# run: conda env create --file environment.yml
+# run: conda env create --file requirements.yml
 name: ORGANIC
 channels:
 - defaults
@@ -6,7 +6,7 @@ channels:
 - rdkit
 - matsci
 dependencies:
-- python>=3.5
+- python=3.6.1
 - anaconda
 - jupyter
 - numpy
